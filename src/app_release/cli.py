@@ -243,6 +243,12 @@ def main(argv=None) -> None:
         logger.info(f"{title} is a draft release; publish it on GitHub, or run this again with --publish.")
 
 
+def renamed(argv=None) -> None:
+    """The ``nuitka-release`` entry point."""
+    sys.exit("nuitka-release is now app-release: run app-release with the same arguments "
+             "(app-release --memory-wait-plugin for the plugin's path).")
+
+
 def run(argv=None) -> None:
     """The console entry point: main() with each outcome logged and timed."""
     started = time.monotonic()

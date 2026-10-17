@@ -15,8 +15,7 @@ test = ["pytest>=7"]
 
 [project.scripts]
 app-release = "app_release.cli:run"
-# The earlier name, which apps' build_exe.py ask for the memory-wait plugin.
-nuitka-release = "app_release.cli:run"
+nuitka-release = "app_release.cli:renamed"
 
 [tool.setuptools.dynamic]
 version = { attr = "app_release.__version__" }

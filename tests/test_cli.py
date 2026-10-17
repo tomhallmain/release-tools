@@ -89,3 +89,9 @@ def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
     assert "OQS (post-quantum) encryption: included." in notes
     assert "gh release create v1.0.0" in capsys.readouterr().out
     assert (tmp_path / "build" / "logs").is_dir()
+
+
+def test_the_old_command_name_fails_naming_app_release():
+    with pytest.raises(SystemExit) as exited:
+        cli.renamed(["--memory-wait-plugin"])
+    assert "app-release --memory-wait-plugin" in str(exited.value.code)

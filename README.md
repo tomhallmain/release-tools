@@ -30,10 +30,9 @@ pipx install -e <path to this repo>
 
 Needs Python 3.11 or newer, for the tool only: pipx gives it its own
 interpreter, and it uses only the standard library. With `-e`, pulling this
-repo updates the command for every app. It installs `app-release`, and
-`nuitka-release` as a second name for apps whose `build_exe.py` asks for that
-one. Without pipx, `python -m app_release` runs it from an environment where it
-is installed.
+repo updates the command for every app. It installs `app-release`. Without
+pipx, `python -m app_release` runs it from an environment where it is
+installed.
 
 ## Use
 
@@ -46,7 +45,25 @@ app-release [REPO] [--builder NAME] [--destination NAME ...] [--toolchain T]
 
 `REPO` is the app's checkout (default: the current directory). The steps and
 options are described in the docstring of `src/app_release/cli.py` and by
-`app-release --help`; `docs/spec.md` has the detail.
+`app-release --help`.
+
+### Publishing an existing build
+
+The version is built into the executables, so a new version always needs a
+new build. To publish what is already built:
+
+- `--no-build` packages a build from an ancestor of HEAD whose files differ,
+  with a warning; the tag goes on the build's commit.
+- `--retag` moves tag `v<version>` to the build's commit. An existing GitHub
+  release keeps its notes, and same-named assets are replaced. Use it only
+  for a release nobody has downloaded: clones that fetched the old tag keep it.
+- `--build-info FILE` puts back the build record the artifacts were built
+  with, after a later build run rewrote it. For a Nuitka app, take it from
+  the executable's unpack folder, e.g.
+  `%APPDATA%\<App>\unpacked\<app>-<build id>\build_info.json`; the rewritten
+  lock file cannot be restored this way.
+
+Together: `--no-build --build-info <file> --retag --publish`.
 
 Builder options: `--memory-wait-plugin` (nuitka: print the plugin's path and
 exit), `--target TRIPLE` (cargo, repeatable).
@@ -104,8 +121,8 @@ build, else `app-release --memory-wait-plugin`.
 
 ## Docs
 
-- `docs/spec.md`: what a release does, step by step, naming, open issues, TODO.
-- `docs/spec_backends.md`: the backends design, and how its steps were done.
+- `docs/TODO.md`: what is pending, open issues, and what waits for an app
+  that needs it.
 - `docs/app_requirements.md`: what a Nuitka app provides, per-app status, and
   moving an app from its own copy of the script to this tool.
 - `docs/nuitka_build_notes.md`: Nuitka findings that bear on releasing.
