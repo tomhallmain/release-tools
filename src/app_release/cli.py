@@ -38,8 +38,8 @@ Last, it tags the build's commit v<version>, pushes the current branch to
 publishes to each destination. Before a release that reads the notes is
 created, it shows them to approve, edit in $EDITOR (Notepad on Windows when
 unset) or abort, then asks once to run the commands; ``--yes`` skips both
-prompts. A destination whose publishing cannot be undone (a package registry)
-asks again, unless ``--yes-irreversible``. Steps already done are skipped, so a
+prompts. Steps that cannot be undone (publishing to a package registry,
+deleting old releases' downloads) ask again, unless ``--yes-irreversible``. Steps already done are skipped, so a
 rerun resumes; ``--retag`` moves an existing tag to the build's commit, and
 ``--publish`` publishes a GitHub draft. ``--no-upload`` stops after staging and
 prints the commands.
@@ -89,7 +89,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--remote", default="origin", help="git remote to push the tag to (default: origin)")
     parser.add_argument("--yes", action="store_true", help="approve the release notes and upload without asking first")
     parser.add_argument("--yes-irreversible", action="store_true",
-                        help="also publish to destinations that cannot be undone without asking")
+                        help="also run the steps that cannot be undone without asking")
     for builder in BUILDERS.values():
         builder.add_options(parser)
     return parser
@@ -229,9 +229,9 @@ def main(argv=None) -> None:
             sys.exit("Not run.")
     if irreversible and not opts.yes_irreversible:
         if not sys.stdin.isatty():
-            sys.exit(f"Not run: publishing to {', '.join(irreversible)} cannot be undone; "
-                     "pass --yes-irreversible to do it without a terminal.")
-        if not _confirm(f"Publishing {version} to {', '.join(irreversible)} cannot be undone. Go ahead?"):
+            sys.exit(f"Not run: steps for {', '.join(irreversible)} cannot be undone; "
+                     "pass --yes-irreversible to run them without a terminal.")
+        if not _confirm(f"Steps for {', '.join(irreversible)} cannot be undone. Go ahead?"):
             sys.exit("Not run.")
     for step in steps:
         with timed(f"> {command_line(step)}"):

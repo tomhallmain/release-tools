@@ -34,3 +34,8 @@ class Destination(ABC):
     def reads_notes(self, steps: list) -> bool:
         """Whether *steps* use the release notes, so they need approval first."""
         return False
+
+    def irreversible(self, steps: list) -> bool:
+        """Whether *steps* include one that cannot be undone, so they get their
+        own confirmation."""
+        return bool(steps) and not self.reversible

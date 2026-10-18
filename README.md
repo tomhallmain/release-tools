@@ -16,7 +16,7 @@ Nuitka `build_exe.py` and released on GitHub.
 
 | Destination | Does |
 |-------------|------|
-| `github` (default) | a draft GitHub release through `gh`, published with `--publish` |
+| `github` (default) | a draft GitHub release through `gh`, published with `--publish`; with `keep`, publishing deletes older releases' downloads |
 | `none` | nothing beyond the tag (a release made by hand, or by CI on the tag) |
 
 It also ships the Nuitka plugin `nuitka_memory_wait.py`, which waits for free
@@ -84,8 +84,20 @@ targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
 ```
 
 The full list is in the docstring of `src/app_release/config.py`; each
-builder's own table is described in its module under
-`src/app_release/builders/`, and the version sources in `versions.py`.
+builder's or destination's own table is described in its module under
+`src/app_release/builders/` or `src/app_release/destinations/`, and the
+version sources in `versions.py`.
+
+GitHub sets no limit on the total size of releases, only under 2 GiB per
+asset. To delete old downloads anyway:
+
+```toml
+[github]
+keep = 5    # on --publish, delete the assets of releases older than the newest 5
+```
+
+The checksums, lock files, notes and tags stay. Deleting cannot be undone,
+so it asks again, unless `--yes-irreversible`.
 
 A builder that writes its own record (cargo, command) keeps it, the log and
 the staged release in `.release/` at the app's root; add that folder to the

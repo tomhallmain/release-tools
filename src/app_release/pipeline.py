@@ -293,8 +293,8 @@ def approve_notes(path: str) -> None:
 # Publishing
 
 def publish_steps(release, destinations) -> tuple:
-    """(steps, whether a step reads the notes, names of the irreversible
-    destinations with steps). Each destination is checked before anything is
+    """(steps, whether a step reads the notes, names of the destinations with
+    steps that cannot be undone). Each destination is checked before anything is
     planned, so a missing login cannot stop the run after the tag is pushed."""
     for destination in destinations:
         destination.check_ready()
@@ -305,6 +305,6 @@ def publish_steps(release, destinations) -> tuple:
         own = destination.plan(release)
         steps += own
         reads_notes = reads_notes or destination.reads_notes(own)
-        if own and not destination.reversible:
+        if destination.irreversible(own):
             irreversible.append(destination.name)
     return steps, reads_notes, irreversible

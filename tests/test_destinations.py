@@ -10,19 +10,24 @@ from app_release.model import Asset, ReleasePlan
 from helpers import HEAD
 
 
-def _gh(monkeypatch, logged_in=True, release=None):
-    """Stubs gh: logged in or not, and *release* (its assets) or no release.
+def _gh(monkeypatch, logged_in=True, release=None, others=None, listed=()):
+    """Stubs gh: logged in or not, *release* (the assets of v1.0.0) or no
+    release, *others* (tag -> assets) and the *listed* releases.
     Returns the commands run."""
     calls = []
+    assets_by_tag = {**(others or {}), "v1.0.0": release}
 
     def fake_run(args, **kwargs):
         calls.append(args)
         if args == ["gh", "auth", "status"]:
             return subprocess.CompletedProcess(args, 0 if logged_in else 1, stdout="", stderr="")
+        if args[:3] == ["gh", "release", "list"]:
+            return subprocess.CompletedProcess(args, 0, stdout=json.dumps(list(listed)), stderr="")
         if args[:3] == ["gh", "release", "view"]:
-            if release is None:
+            assets = assets_by_tag.get(args[3])
+            if assets is None:
                 return subprocess.CompletedProcess(args, 1, stdout="", stderr="not found")
-            return subprocess.CompletedProcess(args, 0, stdout=json.dumps({"assets": release}), stderr="")
+            return subprocess.CompletedProcess(args, 0, stdout=json.dumps({"assets": assets}), stderr="")
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
     monkeypatch.setattr(github.shutil, "which", lambda name: "gh")
@@ -68,6 +73,67 @@ def test_publish_undrafts(tmp_path, monkeypatch):
     _gh(monkeypatch, release=[{"name": "App-1.0.0-windows-x64.exe", "size": 5}])
     steps = github.GitHubRelease(str(tmp_path), {}).plan(_release(tmp_path, publish=True))
     assert steps == [["gh", "release", "edit", "v1.0.0", "--draft=false"]]
+
+
+def _listed(tag, draft=False, prerelease=False, immutable=False, latest=False):
+    return {"tagName": tag, "isDraft": draft, "isPrerelease": prerelease, "isImmutable": immutable,
+            "isLatest": latest}
+
+
+def _downloads(version):
+    return [{"name": f"App-{version}-windows-x64.exe", "size": 9},
+            {"name": f"SHA256SUMS-{version}-windows-x64.txt", "size": 1},
+            {"name": f"App-{version}-windows-x64-requirements.lock.txt", "size": 1}]
+
+
+def _delete(tag, name):
+    return ["gh", "release", "delete-asset", tag, name, "--yes"]
+
+
+def test_publishing_prunes_the_downloads_of_older_releases(tmp_path, monkeypatch):
+    others = {f"v{v}": _downloads(v) for v in ("0.9.0", "0.8.0", "0.7.0", "0.6.0", "0.5.0", "0.4.0")}
+    _gh(monkeypatch, release=[{"name": "App-1.0.0-windows-x64.exe", "size": 5}], others=others,
+        listed=[_listed("v1.0.0", draft=True), _listed("v0.9.0", latest=True), _listed("v0.10.0"),
+                _listed("v0.8.0"), _listed("v0.7.0", immutable=True), _listed("v0.6.0", prerelease=True),
+                _listed("v0.5.0", draft=True), _listed("v0.4.0"), _listed("nightly")])
+    destination = github.GitHubRelease(str(tmp_path), {"github": {"keep": 2}})
+    steps = destination.plan(_release(tmp_path, publish=True))
+    # Kept: v1.0.0 (being published) and v0.10.0 (newest by version); v0.9.0 is the latest.
+    assert steps == [["gh", "release", "edit", "v1.0.0", "--draft=false"],
+                     _delete("v0.8.0", "App-0.8.0-windows-x64.exe"),
+                     _delete("v0.4.0", "App-0.4.0-windows-x64.exe")]
+    assert destination.irreversible(steps)
+
+
+def test_a_new_release_counts_among_those_kept(tmp_path, monkeypatch):
+    _gh(monkeypatch, others={"v0.9.0": _downloads("0.9.0")}, listed=[_listed("v0.9.0")])
+    steps = github.GitHubRelease(str(tmp_path), {"github": {"keep": 1}}).plan(_release(tmp_path, publish=True))
+    assert steps[0][:3] == ["gh", "release", "create"]
+    assert steps[2:] == [_delete("v0.9.0", "App-0.9.0-windows-x64.exe")]
+
+
+def test_a_pruned_release_has_nothing_left_to_delete(tmp_path, monkeypatch):
+    _gh(monkeypatch, release=[{"name": "App-1.0.0-windows-x64.exe", "size": 5}],
+        others={"v0.9.0": _downloads("0.9.0")[1:]}, listed=[_listed("v1.0.0"), _listed("v0.9.0")])
+    destination = github.GitHubRelease(str(tmp_path), {"github": {"keep": 1}})
+    steps = destination.plan(_release(tmp_path, publish=True))
+    assert steps == [["gh", "release", "edit", "v1.0.0", "--draft=false"]]
+    assert not destination.irreversible(steps)
+
+
+def test_nothing_is_pruned_without_keep_or_publish(tmp_path, monkeypatch):
+    calls = _gh(monkeypatch, release=[{"name": "App-1.0.0-windows-x64.exe", "size": 5}],
+                others={"v0.9.0": _downloads("0.9.0")}, listed=[_listed("v0.9.0")])
+    github.GitHubRelease(str(tmp_path), {}).plan(_release(tmp_path, publish=True))
+    assert github.GitHubRelease(str(tmp_path), {"github": {"keep": 1}}).plan(_release(tmp_path)) == []
+    assert not any(call[:3] == ["gh", "release", "list"] for call in calls)
+
+
+def test_keep_must_be_a_whole_number(tmp_path, monkeypatch):
+    _gh(monkeypatch, release=[{"name": "App-1.0.0-windows-x64.exe", "size": 5}])
+    with pytest.raises(SystemExit) as excinfo:
+        github.GitHubRelease(str(tmp_path), {"github": {"keep": "5"}}).plan(_release(tmp_path, publish=True))
+    assert "keep" in str(excinfo.value)
 
 
 def test_github_limits_asset_size():

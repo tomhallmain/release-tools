@@ -408,6 +408,9 @@ class _Destination:
     def reads_notes(self, steps):
         return self.reads
 
+    def irreversible(self, steps):
+        return bool(steps) and not self.reversible
+
 
 def _release(tmp_path):
     from app_release.model import ReleasePlan
