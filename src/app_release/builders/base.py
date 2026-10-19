@@ -7,7 +7,7 @@ import time
 from abc import ABC, abstractmethod
 
 from app_release import record as records
-from app_release.log import command_line, timed
+from app_release.log import command_line, run_logged, timed
 
 APP = "app"     # the build writes its own record
 TOOL = "tool"   # this tool writes the record when it runs the build
@@ -42,11 +42,8 @@ class Builder(ABC):
     # Locations.
 
     def work_dir(self) -> str:
-        """Where the log, the tool-written record and staging go."""
+        """Where the tool-written record and staging go."""
         return os.path.join(self.repo, TOOL_DIR)
-
-    def log_dir(self) -> str:
-        return os.path.join(self.work_dir(), "logs")
 
     def stage_dir(self, tag: str) -> str:
         return os.path.join(self.work_dir(), "stage", tag)
@@ -109,7 +106,7 @@ class Builder(ABC):
         for run in runs:
             command = [*run.command, *extra_args]
             with timed(f"Building: {command_line(command)}"):
-                if subprocess.run(command, cwd=run.cwd, env=run.env).returncode != 0:
+                if run_logged(command, cwd=run.cwd, env=run.env) != 0:
                     sys.exit("The build failed; nothing packaged.")
         if self.record_owner == TOOL:
             records.write(self.record_path(), version, source, started, self.toolchain_versions(),

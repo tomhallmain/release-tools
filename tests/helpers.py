@@ -2,7 +2,6 @@
 no __init__.py), so tests import it as ``helpers``."""
 import json
 import os
-import subprocess
 
 from app_release import record as records
 from app_release.model import EXECUTABLE, Artifact
@@ -62,16 +61,16 @@ def built(folder, name="App.exe", product="App", platform="windows-x64", **recor
     return records.load(path), Artifact(product=product, path=exe, kind=EXECUTABLE, platform=platform)
 
 
-def recording_run(monkeypatch, module, returncode=0, stdout=""):
-    """Replace subprocess.run (as *module* sees it); returns the list of
+def recording_command(monkeypatch, module, returncode=0):
+    """Replace run_logged (as *module* sees it); returns the list of
     (args, kwargs) it was called with."""
     calls = []
 
-    def fake_run(args, **kwargs):
+    def fake_run_logged(args, **kwargs):
         calls.append((args, kwargs))
-        return subprocess.CompletedProcess(args, returncode, stdout=stdout, stderr="")
+        return returncode
 
-    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    monkeypatch.setattr(module, "run_logged", fake_run_logged)
     return calls
 
 

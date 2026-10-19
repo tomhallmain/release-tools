@@ -9,7 +9,7 @@ import pytest
 from app_release import cli
 from app_release.builders import base, nuitka
 from app_release.model import EXECUTABLE, Artifact
-from helpers import Options, recording_run
+from helpers import Options, recording_command
 
 
 def _builder(tmp_path, script='"--with-headless"', app_name="App", **options):
@@ -37,7 +37,6 @@ def chosen(monkeypatch):
 def test_paths_are_those_build_exe_uses(tmp_path):
     builder = _builder(tmp_path)
     assert builder.record_path() == os.path.join(str(tmp_path), "build", "nuitka", "build_info.json")
-    assert builder.log_dir() == os.path.join(str(tmp_path), "build", "logs")
     assert builder.stage_dir("v1.0.0") == os.path.join(str(tmp_path), "dist", "release", "v1.0.0")
     assert builder.record_owner == "app"
 
@@ -69,7 +68,7 @@ def test_an_unknown_product_is_refused(tmp_path, chosen):
 def test_the_build_args_follow_the_script(tmp_path, chosen, monkeypatch):
     builder = _builder(tmp_path, script="")
     runs = builder.plan(_stale("App"), None)
-    calls = recording_run(monkeypatch, base)
+    calls = recording_command(monkeypatch, base)
     builder.build(runs, ["--jobs=4", "--with-oqs"], "1.0.0", {})
     assert calls[0][0][1:] == [os.path.join(str(tmp_path), "build_exe.py"), "--jobs=4", "--with-oqs"]
     # The app writes its own record.

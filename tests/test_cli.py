@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from app_release import cli, vcs
+from app_release import cli, log, vcs
 from app_release.builders.nuitka import NuitkaBuilder
 from app_release.destinations.github import GitHubRelease
 from helpers import HEAD, checkout_git, write_record
@@ -59,6 +59,7 @@ def test_python_is_an_alias_of_toolchain():
 def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
     """VERSION, build_exe.py, a build record from HEAD and an executable after it:
     a --no-build --no-upload run stages the assets under today's names."""
+    monkeypatch.setenv(log.LOG_DIR_ENV, str(tmp_path / "logs"))
     monkeypatch.setattr(vcs, "git", checkout_git())
     (tmp_path / "build_exe.py").write_text("", encoding="utf-8")
     (tmp_path / "VERSION").write_text("1.0.0\n", encoding="utf-8")
@@ -75,9 +76,7 @@ def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
     try:
         cli.main([str(tmp_path), "--no-build", "--no-upload"])
     finally:
-        for handler in list(cli.logger.handlers):
-            cli.logger.removeHandler(handler)
-            handler.close()
+        log.finish()
     from app_release import platforms
     stage = tmp_path / "dist" / "release" / "v1.0.0"
     suffix = f"1.0.0-{platforms.host()}"
@@ -88,7 +87,10 @@ def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
     notes = (stage / "RELEASE_NOTES.md").read_text(encoding="utf-8")
     assert "OQS (post-quantum) encryption: included." in notes
     assert "gh release create v1.0.0" in capsys.readouterr().out
-    assert (tmp_path / "build" / "logs").is_dir()
+    logs = os.listdir(tmp_path / "logs" / tmp_path.name)
+    assert len(logs) == 1 and logs[0].endswith("-v1.0.0.log")
+    assert "Staged in" in (tmp_path / "logs" / tmp_path.name / logs[0]).read_text(encoding="utf-8")
+    assert os.listdir(stage / "logs") == logs
 
 
 def test_the_old_command_name_fails_naming_app_release():

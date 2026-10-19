@@ -44,19 +44,23 @@ rerun resumes; ``--retag`` moves an existing tag to the build's commit, and
 ``--publish`` publishes a GitHub draft. ``--no-upload`` stops after staging and
 prints the commands.
 
-Each step is timed, and the log goes to the console and to a file in the app's
-build folder (Nuitka: build/logs/; otherwise .release/logs/).
+Each step is timed. The log, with the output of the build and of the
+publishing commands, goes to the console and to a file per run in the app's
+folder under app-release's log folder (``APP_RELEASE_LOG_DIR``, else
+%LOCALAPPDATA%\\app-release\\logs on Windows, ~/.local/state/app-release/logs
+elsewhere), named for the time and the version. A copy goes to the staging
+folder's ``logs/``, which is not uploaded.
 """
 import argparse
 import os
-import subprocess
 import sys
 import time
 
 from app_release import __version__, config as configuration, pipeline, vcs
 from app_release.builders import BUILDERS, DEFAULT as DEFAULT_BUILDER
 from app_release.destinations import DESTINATIONS, DEFAULT as DEFAULT_DESTINATIONS
-from app_release.log import command_line, duration, logger, setup as setup_logging, timed
+from app_release import log
+from app_release.log import command_line, duration, logger, run_logged, timed
 from app_release.model import ReleasePlan
 from app_release.versions import BUMP_PARTS, bump, from_config as version_from_config
 
@@ -137,7 +141,7 @@ def main(argv=None) -> None:
     config, config_path = configuration.load(repo)
     builder = _builder(repo, config, opts)
     destinations = _destinations(repo, config, opts)
-    logger.info(f"Log: {setup_logging(builder.log_dir())}")
+    log.setup(os.path.basename(repo))
     logger.info(f"app-release {__version__} on {repo}: builder {builder.name}, "
                 f"destinations {', '.join(d.name for d in destinations)}"
                 + (f", configured in {config_path}" if config_path else ", default configuration"))
@@ -162,6 +166,7 @@ def main(argv=None) -> None:
     if opts.bump:
         version = bump(repo, version_source, version, opts.bump, opts.no_build)
     tag = f"v{version}"
+    log.name_after(version)
 
     app_name = configuration.app_name(config, [a.product for a in artifacts])
     builder.app_config = {**config, "app_name": app_name}
@@ -187,6 +192,7 @@ def main(argv=None) -> None:
         sys.exit("Cannot tell which commit the build is from.")
 
     out_dir = builder.stage_dir(tag)
+    log.keep_copy_in(out_dir)
     with timed(f"Staging the assets in {out_dir}"):
         downloads, sums = pipeline.stage(out_dir, app_name, version, opts.variant, artifacts,
                                          builder.lock_files())
@@ -235,7 +241,7 @@ def main(argv=None) -> None:
             sys.exit("Not run.")
     for step in steps:
         with timed(f"> {command_line(step)}"):
-            if subprocess.run(step, cwd=repo).returncode != 0:
+            if run_logged(step, cwd=repo) != 0:
                 sys.exit("Stopped: the command above failed. Running this again resumes from there.")
     if opts.publish:
         logger.info(f"Published {title}.")
@@ -253,18 +259,21 @@ def run(argv=None) -> None:
     """The console entry point: main() with each outcome logged and timed."""
     started = time.monotonic()
     try:
-        main(argv)
-    except SystemExit as e:
-        if e.code not in (None, 0):
-            if isinstance(e.code, str):
-                logger.error(e.code)
-            logger.error(f"Stopped after {duration(time.monotonic() - started)}")
+        try:
+            main(argv)
+        except SystemExit as e:
+            if e.code not in (None, 0):
+                if isinstance(e.code, str):
+                    logger.error(e.code)
+                logger.error(f"Stopped after {duration(time.monotonic() - started)}")
+                sys.exit(1)
+            raise
+        except KeyboardInterrupt:
+            logger.error(f"Interrupted after {duration(time.monotonic() - started)}")
             sys.exit(1)
-        raise
-    except KeyboardInterrupt:
-        logger.error(f"Interrupted after {duration(time.monotonic() - started)}")
-        sys.exit(1)
-    except BaseException:
-        logger.exception(f"Failed after {duration(time.monotonic() - started)}")
-        sys.exit(1)
-    logger.info(f"Done in {duration(time.monotonic() - started)}")
+        except BaseException:
+            logger.exception(f"Failed after {duration(time.monotonic() - started)}")
+            sys.exit(1)
+        logger.info(f"Done in {duration(time.monotonic() - started)}")
+    finally:
+        log.finish()

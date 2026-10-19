@@ -99,10 +99,32 @@ keep = 5    # on --publish, delete the assets of releases older than the newest 
 The checksums, lock files, notes and tags stay. Deleting cannot be undone,
 so it asks again, unless `--yes-irreversible`.
 
-A builder that writes its own record (cargo, command) keeps it, the log and
-the staged release in `.release/` at the app's root; add that folder to the
-app's `.gitignore`. The nuitka builder uses the app's `build/` and
-`dist/release/`, as before.
+A builder that writes its own record (cargo, command) keeps it and the
+staged release in `.release/` at the app's root; add that folder to the app's
+`.gitignore`. The nuitka builder uses the app's `build/` and `dist/release/`,
+as before.
+
+### Logs
+
+Each run's log, with the full output of the build and of the publishing
+commands, is kept outside the checkout, in one folder per app (named after
+the checkout's folder):
+
+- Windows: `%LOCALAPPDATA%\app-release\logs\<app>\`
+- elsewhere: `$XDG_STATE_HOME/app-release/logs/<app>/` (default
+  `~/.local/state/...`)
+- `APP_RELEASE_LOG_DIR` replaces `.../app-release/logs` with another folder.
+
+Files are named `<YYYYmmdd-HHMMSS>-v<version>.log`, so a release's runs (the
+`--bump` build, the `--publish`) sort together. A copy goes to the staging
+folder's `logs/` (`dist/release/v<version>/logs/` for nuitka), which is not
+uploaded. The last line of a run names its log. Logs are never deleted;
+`KEEP_DAYS` in `src/app_release/log.py` turns on deleting logs older than
+that, past an app's newest `KEEP_AT_LEAST`.
+
+The build's output is piped through app-release to reach the log, so tools
+that draw progress bars only on a terminal (Nuitka) print plain lines
+instead. Its input stays the terminal.
 
 ### Which toolchain builds the app
 
