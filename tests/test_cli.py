@@ -87,8 +87,8 @@ def _no_build(*args, **kwargs):
     raise AssertionError("built")
 
 
-def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
-    """A --no-build --no-upload run stages the assets under today's names."""
+def test_a_nuitka_app_is_staged_under_release_names(tmp_path, monkeypatch, capsys):
+    """A --no-build --no-upload run stages the assets under their release names."""
     monkeypatch.setattr(vcs, "git", checkout_git())
     _nuitka_app(tmp_path)
     _main(str(tmp_path), "--no-build", "--no-upload")

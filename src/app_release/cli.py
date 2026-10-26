@@ -1,70 +1,50 @@
 """Release an app: rebuild what is behind, stage the artifacts, tag the build's
 commit and publish.
 
-Run on the machine that builds, from any directory:
-
-    app-release [REPO] [--builder NAME] [--destination NAME ...] [--toolchain T]
-        [--bump major|minor|patch] [--variant cuda] [--products NAME ...] [--no-build]
-        [--build-info FILE] [--retag] [--force] [--notes FILE] [--no-upload]
-        [--publish] [--status] [--yes] [--yes-irreversible] [-- <build args>]
-
 REPO is the app's checkout (default: the current directory). Its
-``release.toml``, or ``[tool.release]`` in its ``pyproject.toml``, picks the
-builder, the destinations and the version's location; without either, the app
-is taken to be built by a Nuitka ``build_exe.py`` and released on GitHub.
+``release.toml`` or ``[tool.release]`` in ``pyproject.toml`` picks the builder,
+the destinations and the version's location; without either, the app is a
+Nuitka ``build_exe.py`` app released on GitHub. Run on the machine that builds.
 
-``--bump`` first raises that part of the version (1.4.2 -> 2.0.0, 1.5.0 or
-1.4.3) and commits the version file alone, once tag v<version> exists: a rerun
-before the new version is tagged keeps it. It needs a clean checkout, and the
-artifacts are then rebuilt, since they embed the version. It refuses while
-the current version's release is still a draft (other platforms may be adding
-to it), unless ``--force``.
+1. Early checks: each destination is ready (``gh`` installed and logged in;
+   skipped with ``--no-upload``), and the checkout is not behind its upstream
+   after a fetch (``--force`` goes ahead).
+2. ``--bump`` raises that part of the version (1.4.2 -> 2.0.0, 1.5.0, 1.4.3)
+   and commits the version file, once tag v<version> exists. It needs a clean
+   checkout, and refuses while that version's release is a draft other
+   platforms may still be adding to, unless ``--force``.
+3. Rebuild the artifacts behind HEAD, adding the arguments after ``--`` and the
+   option of each feature the last build had (Nuitka: ``--with-oqs``). Nothing
+   is built with uncommitted changes or a missing prerequisite (the builder's
+   ``requires``; Nuitka: a C compiler). ``--no-build`` skips this step;
+   ``--build-info FILE`` first restores the record the artifacts were built with.
+4. Check the build: version, commit or same files, no uncommitted changes,
+   artifacts newer than the build, asset sizes, and tag v<version> on the
+   build's commit both here and on ``--remote``. The remote's tag counts: a
+   missing or stale local tag is moved to match it, and an unreachable remote
+   stops a run that uploads. ``--force`` packages despite failed checks.
+5. Stage each artifact as ``<Product>-<version>[-<os>-<arch>][-<variant>]<ext>``,
+   with the lock files, a SHA256SUMS file per platform and release notes
+   (``--notes FILE`` gives your own). Edits to the generated notes file are
+   kept across reruns. ``--no-upload`` stops here and prints the commands.
+6. Tag the build's commit, push the branch when the remote lacks the commit,
+   push the tag, and publish. A GitHub release that exists already gets this
+   run's assets and its part of the notes merged in. ``--retag`` moves a tag
+   on another commit; ``--publish`` publishes a GitHub draft once every
+   configured ``platforms`` entry is in it, built from the tag's commit.
 
-Before bumping or building, it fetches the branch's upstream and stops when
-the checkout is behind it ("pull first"; ``--force`` goes ahead).
-
-First it rebuilds the artifacts that are behind the checkout's HEAD, with the
-arguments after ``--`` added to each build command (e.g. ``-- --jobs=4``), plus
-the option of each feature the last build had (Nuitka: ``--with-oqs``). It
-builds nothing while tracked files have uncommitted changes, nor when the
-machine lacks what the build needs (the builder's ``requires`` commands;
-Nuitka: a C compiler). ``--no-build``
-skips this step; ``--build-info FILE`` first puts back the build record the
-artifacts were built with.
-
-Then it checks the build against the checkout (version, commit or same files,
-no uncommitted changes, artifacts not older than the build, an existing tag on
-the build's commit, both here and on ``--remote``, asset sizes); ``--force``
-packages despite failed checks. Another machine's tag on the remote is what
-counts: a local tag missing or moved is made to match it when it is on the
-build's commit. The remote must be reachable, except with ``--no-upload``.
-It stages each artifact as ``<Product>-<version>[-<os>-<arch>][-<variant>]<ext>``
-with the lock files, a SHA256SUMS file per platform and release notes, unless
-``--notes`` names a file to use. A rerun regenerates the notes only while the
-file is as last generated, so edits to it are kept.
-
-Last, it tags the build's commit v<version>, pushes the current branch to
-``--remote`` when the remote's copy of it lacks that commit, pushes the tag, and
-publishes to each destination; that each destination is ready (gh installed
-and logged in) is checked before building. A GitHub release that exists
-already, from another platform's run, gets this run's assets and its part of
-the notes merged into the release's (see destinations/github.py). Before
-notes are created or changed, it shows them to approve, edit in $EDITOR
-(Notepad on Windows when unset) or abort, then asks once to run the commands;
-``--yes`` skips both prompts. Steps that cannot be undone (publishing to a
-package registry, deleting old releases' downloads) ask again, unless
-``--yes-irreversible``. Steps already done are skipped, so a rerun resumes;
-``--retag`` moves an existing tag to the build's commit, and ``--publish``
-publishes a GitHub draft, once every configured ``platforms`` entry is in it
-and built from the tag's commit. ``--no-upload`` stops after staging and
-prints the commands.
+Notes about to be created or changed are shown to approve, edit in $EDITOR
+(Notepad on Windows when unset) or abort; then it asks once to run the
+commands. ``--yes`` skips both prompts. Steps that cannot be undone (publishing
+to a package registry, deleting old releases' downloads) ask again, unless
+``--yes-irreversible``. Steps already done are skipped, so a rerun resumes.
 
 ``--status`` only reports: the tag here and on ``--remote``, and each
-destination's release for the checkout's version (draft or not, its
-platforms, those configured but missing, the commit of each notes part).
+destination's release (draft or not, platforms present and missing, the commit
+of each notes part).
 
-Each step is timed, and the log goes to the console and to a file in the app's
-build folder (Nuitka: build/logs/; otherwise .release/logs/).
+Each step is timed; the log goes to the console and to build/logs/ (Nuitka)
+or .release/logs/.
 """
 import argparse
 import os

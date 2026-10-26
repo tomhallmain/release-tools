@@ -2,25 +2,21 @@
 with every staged asset, published with --publish.
 
     [github]
-    keep = 5                     # prune: keep the downloads of the newest 5 releases
+    keep = 5                     # on publish, keep the downloads of the newest 5 releases
     prune_spare = ["SHA256SUMS-*", "*-requirements.lock.txt"]   # assets pruning never deletes
 
-With ``keep``, a run that publishes then deletes the assets of older published
-``v<version>`` releases, except those matching ``prune_spare``; the release,
-its notes and its tag stay. Drafts, pre-releases, the release GitHub marks
-latest and the one being published are never pruned. Immutable releases are
-skipped: GitHub refuses to delete their assets. Deleting cannot be undone, so
-it needs the second confirmation (``--yes-irreversible``).
+Pruning deletes assets of older published ``v<version>`` releases; their notes
+and tags stay. It skips drafts, pre-releases, the latest release, the one being
+published, and immutable releases (GitHub refuses those deletions). Deleting
+cannot be undone, so it needs ``--yes-irreversible``.
 
-A release built on several machines (see ``platforms`` in config.py): a run
-that finds the release already there uploads its assets and merges its notes
-into the release's, replacing only the marked parts it owns (the commit line,
-the downloads list from the release's assets, and its platform's part) and
-keeping everything else. Notes without marked parts are left alone, as are
-any with ``--notes``. ``--publish`` refuses while a configured platform has no
-``SHA256SUMS-<version>-<platform>`` asset, or a platform's notes part names a
-commit other than the tag's; ``--retag`` refuses while other platforms' builds
-are in the release. ``--force`` overrides each, with a warning.
+Several machines can add to one release. A run that finds the release uploads
+its assets and merges its notes, replacing the marked parts it owns (commit
+line, downloads list, its platform's part); notes without marked parts, and
+runs with ``--notes``, leave them alone. ``--publish`` refuses while a
+configured platform has no ``SHA256SUMS-<version>-<platform>`` asset or a
+platform part names a commit other than the tag's; ``--retag`` refuses while
+other platforms' builds are in the release. ``--force`` overrides each.
 """
 import fnmatch
 import json
