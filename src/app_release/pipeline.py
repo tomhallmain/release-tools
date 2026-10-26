@@ -7,8 +7,9 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 
-from app_release import __version__, vcs
+from app_release import __version__, platforms, vcs
 from app_release.log import logger
 from app_release.model import DIRECTORY, EXECUTABLE, Asset
 from app_release.versions import VERSION_PATTERN
@@ -150,11 +151,31 @@ def check(repo, version, tag, record, artifacts, variant, variant_hints, max_ass
             errors.append(f"Tag {tag} points at {tagged[:10]}, not the build's commit {expected[:10]}; "
                           "--retag moves it.")
     if max_asset_bytes:
+        limit = f"{max_asset_bytes / 1024 ** 3:.0f} GiB"
         for artifact in artifacts:
-            if artifact.kind != DIRECTORY and os.path.getsize(artifact.path) >= max_asset_bytes:
-                errors.append(f"{artifact.path} is {max_asset_bytes / 1024 ** 3:.0f} GiB or larger, "
+            if artifact.kind == DIRECTORY:
+                if _folder_size(artifact.path) >= max_asset_bytes:
+                    warnings.append(f"{artifact.path} holds {limit} or more; its staged archive is "
+                                    "checked against the asset limit before anything is uploaded.")
+            elif os.path.getsize(artifact.path) >= max_asset_bytes:
+                errors.append(f"{artifact.path} is {limit} or larger, "
                               "more than a destination accepts as an asset.")
     return errors, warnings
+
+
+def _folder_size(path: str) -> int:
+    return sum(os.path.getsize(os.path.join(folder, name))
+               for folder, _, names in os.walk(path) for name in names
+               if not os.path.islink(os.path.join(folder, name)))
+
+
+def staged_too_large(assets, max_asset_bytes) -> list:
+    """Errors for staged *assets* of *max_asset_bytes* or more."""
+    if not max_asset_bytes:
+        return []
+    return [f"{a.name} is {os.path.getsize(a.path) / 1024 ** 3:.2f} GiB staged, more than a destination "
+            f"accepts as an asset (under {max_asset_bytes / 1024 ** 3:.0f} GiB)."
+            for a in assets if os.path.getsize(a.path) >= max_asset_bytes]
 
 
 # Staging
@@ -172,10 +193,35 @@ def suffix(version: str, platform, variant) -> str:
     return "-".join(p for p in (version, platform, variant) if p)
 
 
-def stage(out_dir, app_name, version, variant, artifacts, lock_files) -> tuple:
-    """Copy (or zip) *artifacts* and *lock_files* into *out_dir* under release
-    names and write a checksums file per platform. Returns (downloads, checksum
-    files), both lists of Asset."""
+def _archives_unix(artifact, archive_unix: bool) -> bool:
+    return (archive_unix and artifact.kind == EXECUTABLE and bool(artifact.platform)
+            and not artifact.platform.startswith("windows"))
+
+
+def _tar_executable(path: str, target: str) -> None:
+    """A .tar.gz of the executable at *path*, mode 0755: a browser download of a
+    bare file loses its executable bit on macOS and Linux, an archive keeps it."""
+    def executable(info):
+        info.mode, info.uid, info.gid, info.uname, info.gname = 0o755, 0, 0, "", ""
+        return info
+
+    with tarfile.open(target, "w:gz") as archive:
+        archive.add(path, arcname=os.path.basename(path), filter=executable)
+
+
+def _zip_app_bundle(path: str, target: str) -> None:
+    """Zip a macOS .app with ditto, which keeps its symlinks and code signature."""
+    if not shutil.which("ditto"):
+        sys.exit(f"{path} is a macOS app bundle; stage it on the Mac that built it (needs ditto).")
+    if subprocess.run(["ditto", "-c", "-k", "--keepParent", path, target]).returncode != 0:
+        sys.exit(f"ditto could not zip {path}.")
+
+
+def stage(out_dir, app_name, version, variant, artifacts, lock_files, archive_unix=True) -> tuple:
+    """Copy (or archive) *artifacts* and *lock_files* into *out_dir* under release
+    names and write a checksums file per platform. With *archive_unix*, macOS and
+    Linux executables are staged as .tar.gz. Returns (downloads, checksum files),
+    both lists of Asset."""
     os.makedirs(out_dir, exist_ok=True)
     groups = {}   # platform -> [Asset]
     names = set()
@@ -188,14 +234,21 @@ def stage(out_dir, app_name, version, variant, artifacts, lock_files) -> tuple:
         groups.setdefault(platform, []).append(asset)
 
     for artifact in artifacts:
-        name = f"{artifact.product}-{suffix(version, artifact.platform, variant)}{artifact.extension}"
+        archived = _archives_unix(artifact, archive_unix)
+        extension = ".tar.gz" if archived else artifact.extension
+        name = f"{artifact.product}-{suffix(version, artifact.platform, variant)}{extension}"
         target = os.path.join(out_dir, name)
         logger.info(f"Staging {artifact.path} -> {name}")
         if artifact.kind == DIRECTORY:
             if os.path.exists(target):
                 os.remove(target)
-            parent, folder = os.path.split(os.path.abspath(artifact.path))
-            shutil.make_archive(target[:-len(".zip")], "zip", root_dir=parent, base_dir=folder)
+            if artifact.path.rstrip("/\\").endswith(".app"):
+                _zip_app_bundle(artifact.path, target)
+            else:
+                parent, folder = os.path.split(os.path.abspath(artifact.path))
+                shutil.make_archive(target[:-len(".zip")], "zip", root_dir=parent, base_dir=folder)
+        elif archived:
+            _tar_executable(artifact.path, target)
         else:
             shutil.copy2(artifact.path, target)
         add(Asset(name, target, artifact), artifact.platform)
@@ -308,6 +361,37 @@ def merge_notes(body: str, local: str, downloads: list) -> str:
     return body
 
 
+def developer_id_signed(path: str) -> bool:
+    """Whether *path* has a Developer ID signature; an ad-hoc one does not count."""
+    try:
+        result = subprocess.run(["codesign", "-dv", "--verbose=2", path], capture_output=True, text=True,
+                                timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0 and "Authority=Developer ID Application" in result.stderr
+
+
+def _platform_lines(platform, artifacts, notes_config) -> list:
+    """Notes lines about running *platform*'s build."""
+    runnable = [a for a in artifacts if a.platform == platform and a.kind in (EXECUTABLE, DIRECTORY)]
+    if not runnable:
+        return []
+    if platform.startswith("windows"):
+        if notes_config.get("unsigned_windows", True) and any(a.kind == EXECUTABLE for a in runnable):
+            return ["- The executable is unsigned: Windows SmartScreen asks for confirmation "
+                    "(More info, then Run anyway)."]
+    elif platform.startswith("macos"):
+        if notes_config.get("unsigned_macos", True) and not all(developer_id_signed(a.path) for a in runnable):
+            return ["- The app is not notarized, so macOS blocks it the first time: in System Settings > "
+                    "Privacy & Security, choose Open Anyway (up to macOS 14, right-clicking it and "
+                    "choosing Open also works)."]
+    elif platform.startswith("linux") and platform == platforms.host():
+        glibc = platforms.glibc_version()
+        if notes_config.get("linux_glibc", True) and glibc:
+            return [f"- Needs glibc {glibc} or newer."]
+    return []
+
+
 def release_notes(repo, title, record, commit, artifacts, downloads, builder_lines=(),
                   features=None, notes_config=None) -> str:
     notes_config = notes_config or {}
@@ -327,11 +411,7 @@ def release_notes(repo, title, record, commit, artifacts, downloads, builder_lin
              "", "## Platforms", ""]
     for platform in sorted({a.platform for a in artifacts if a.platform}) or [ANY_PLATFORM]:
         part = [f"**{platform}**, built from commit {commit[:10]}" + (f" with {built_with}." if built_with else "."),
-                *feature_lines]
-        if platform.startswith("windows") and notes_config.get("unsigned_windows", True) and any(
-                a.kind == EXECUTABLE and a.platform == platform for a in artifacts):
-            part.append("- The executable is unsigned: Windows SmartScreen asks for confirmation "
-                        "(More info, then Run anyway).")
+                *feature_lines, *_platform_lines(platform, artifacts, notes_config)]
         lines += [*_block("platform", part, f" {platform} commit={commit}"), ""]
     lines += ["## Notes", "", f"- Packaged with app-release {__version__}.", *builder_lines]
     lines += list(notes_config.get("extra") or [])

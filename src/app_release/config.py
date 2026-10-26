@@ -18,6 +18,11 @@ defaults, which are those of a Nuitka-built app released on GitHub.
     [notes]
     extra = ["- Some line."]
     unsigned_windows = true            # the SmartScreen line for Windows executables
+    unsigned_macos = true              # the Gatekeeper line for macOS builds without a Developer ID
+    linux_glibc = true                 # the glibc version a Linux build needs
+
+    [stage]
+    archive_unix_executables = true    # macOS and Linux executables as .tar.gz, keeping the executable bit
 
     [<builder or destination name>]    # that backend's own settings
 
@@ -31,7 +36,7 @@ import tomllib
 RELEASE_TOML = "release.toml"
 PYPROJECT = "pyproject.toml"
 KNOWN_KEYS = {"builder", "destinations", "version", "app_name", "secondary_suffixes",
-              "platforms", "features", "variant_hints", "notes"}
+              "platforms", "features", "variant_hints", "notes", "stage"}
 
 
 def _read_toml(path: str) -> dict:
@@ -82,6 +87,14 @@ def platforms(config: dict) -> list:
     if not isinstance(value, list) or not all(isinstance(p, str) and p for p in value):
         sys.exit(f"Configuration: platforms must be a list of platform names such as \"linux-x64\", "
                  f"not {value!r}.")
+    return value
+
+
+def archive_unix(config: dict) -> bool:
+    """Whether macOS and Linux executables are staged as .tar.gz ([stage])."""
+    value = (config.get("stage") or {}).get("archive_unix_executables", True)
+    if not isinstance(value, bool):
+        sys.exit(f"Configuration: [stage] archive_unix_executables must be true or false, not {value!r}.")
     return value
 
 

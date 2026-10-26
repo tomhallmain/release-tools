@@ -130,6 +130,13 @@ All settings are listed in the docstring of `src/app_release/config.py`; each
 backend's table in its module under `builders/` or `destinations/`; version
 sources in `versions.py`.
 
+macOS and Linux executables are uploaded as `.tar.gz`, which keeps their
+executable bit through a browser download; `[stage] archive_unix_executables =
+false` uploads them bare. Windows executables are uploaded bare, and a macOS
+`.app` as a zip made with `ditto`, which keeps its symlinks and signature. The
+release notes say how to get past SmartScreen and Gatekeeper, and which glibc
+a Linux build needs; each line has a `[notes]` switch.
+
 GitHub limits each asset to under 2 GiB, but not the total. To delete old
 downloads:
 
@@ -164,7 +171,9 @@ toolchain in the build command.
 
 ## What a Nuitka app must provide
 
-- `build_exe.py` at the root, writing the executables directly to `dist/`.
+- `build_exe.py` at the root, writing the executables directly to `dist/`;
+  on macOS, preferably as a standalone (not onefile) app bundle,
+  `dist/<App>.app`, which is packaged instead of a bare `dist/<App>`.
 - The version in `VERSION`, or as `APP_VERSION` in the module `build_exe.py`
   names in `VERSION_FILE`.
 - Optionally `build/nuitka/build_info.json` (the build record) and

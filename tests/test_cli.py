@@ -14,6 +14,11 @@ from app_release.destinations.github import GitHubRelease
 from helpers import HEAD, checkout_git, upstream_answers, write_record
 
 
+@pytest.fixture(autouse=True)
+def _no_codesign(monkeypatch):
+    monkeypatch.setattr(cli.pipeline, "developer_id_signed", lambda path: False)
+
+
 def _opts(*argv):
     return cli._parser().parse_args(list(argv))
 
@@ -96,7 +101,7 @@ def test_a_nuitka_app_is_staged_under_release_names(tmp_path, monkeypatch, capsy
     stage = tmp_path / "dist" / "release" / "v1.0.0"
     suffix = f"1.0.0-{platforms.host()}"
     names = sorted(os.listdir(stage))
-    assert f"App-{suffix}{'.exe' if sys.platform == 'win32' else ''}" in names
+    assert f"App-{suffix}{'.exe' if sys.platform == 'win32' else '.tar.gz'}" in names
     assert f"App-{suffix}-requirements.lock.txt" in names
     assert f"SHA256SUMS-{suffix}.txt" in names
     notes = (stage / "RELEASE_NOTES.md").read_text(encoding="utf-8")

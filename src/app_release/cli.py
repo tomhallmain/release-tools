@@ -261,7 +261,11 @@ def main(argv=None) -> None:
     out_dir = builder.stage_dir(tag)
     with timed(f"Staging the assets in {out_dir}"):
         downloads, sums = pipeline.stage(out_dir, app_name, version, opts.variant, artifacts,
-                                         builder.lock_files())
+                                         builder.lock_files(), configuration.archive_unix(config))
+    for message in pipeline.staged_too_large(downloads, min(limits) if limits else None):
+        if not opts.no_upload:
+            sys.exit(message)
+        logger.warning(message)
     title = f"{app_name} {version}"
     notes = os.path.abspath(opts.notes) if opts.notes else os.path.join(out_dir, "RELEASE_NOTES.md")
     if not opts.notes:

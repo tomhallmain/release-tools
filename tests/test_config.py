@@ -70,5 +70,12 @@ def test_platforms_default_to_none_and_must_be_a_list_of_names():
             config.platforms({"platforms": bad})
 
 
+def test_archiving_unix_executables_is_on_unless_turned_off():
+    assert config.archive_unix({}) is True
+    assert config.archive_unix({"stage": {"archive_unix_executables": False}}) is False
+    with pytest.raises(SystemExit):
+        config.archive_unix({"stage": {"archive_unix_executables": "no"}})
+
+
 def test_configured_app_name_wins():
     assert config.app_name({"app_name": "SD Runner"}, ["SDRunner"]) == "SD Runner"

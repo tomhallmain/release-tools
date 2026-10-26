@@ -2,7 +2,7 @@
 
 The build script writes its own record, ``build/nuitka/build_info.json``,
 before it compiles, and the pip lock file beside it; the executables land
-directly in ``dist/``. An ``<App>Headless`` executable is rebuilt with the
+directly in ``dist/``, or on macOS as ``dist/<Product>.app`` bundles. An ``<App>Headless`` executable is rebuilt with the
 script's ``--with-headless`` (which builds both) or ``--headless``. A rebuild
 gets this package's memory-wait plugin in ``NUITKA_MEMORY_WAIT_PLUGIN``.
 """
@@ -15,7 +15,7 @@ from app_release import platforms
 from app_release.builders.base import Builder, APP, run_version
 from app_release.builders.toolchains import build_python
 from app_release.log import logger
-from app_release.model import EXECUTABLE, Artifact, BuildRun
+from app_release.model import DIRECTORY, EXECUTABLE, Artifact, BuildRun
 from app_release.versions import FileVersion, PatternVersion
 
 BUILD_SCRIPT = "build_exe.py"
@@ -70,19 +70,29 @@ class NuitkaBuilder(Builder):
         dist = os.path.join(self.repo, "dist")
         if not os.path.isdir(dist):
             return []
-        found = []
+        found = {}
+        bundles = {}
         for name in sorted(os.listdir(dist)):
             path = os.path.join(dist, name)
+            base, ext = os.path.splitext(name)
+            if sys.platform == "darwin" and ext == ".app" and os.path.isdir(path):
+                bundles[base] = Artifact(product=base, path=path, kind=DIRECTORY, platform=platforms.host())
+                continue
             if not os.path.isfile(path):
                 continue
-            base, ext = os.path.splitext(name)
             if sys.platform == "win32":
                 if ext.lower() != ".exe":
                     continue
             elif ext or not os.access(path, os.X_OK):
                 continue
-            found.append(Artifact(product=base, path=path, kind=EXECUTABLE, platform=platforms.host()))
-        return found
+            found[base] = Artifact(product=base, path=path, kind=EXECUTABLE, platform=platforms.host())
+        for product, bundle in bundles.items():
+            bare = found.get(product)
+            if bare and os.path.getmtime(bare.path) >= os.path.getmtime(bundle.path):
+                logger.warning(f"Both {bare.path} and {bundle.path} exist and the executable is newer; "
+                               "packaging the app bundle. Delete whichever the build no longer makes.")
+            found[product] = bundle
+        return [found[product] for product in sorted(found)]
 
     def default_version_source(self):
         """VERSION at the root, or APP_VERSION in the module the build script

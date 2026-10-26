@@ -94,6 +94,7 @@ OLD = "c" * 40
 def _notes_for(tmp_path, monkeypatch, platform, name, commit=HEAD):
     """The notes a run on *platform* generates for executable *name*."""
     monkeypatch.setattr(vcs, "git", lambda repo, *args, **kwargs: None)
+    monkeypatch.setattr(pipeline, "developer_id_signed", lambda path: False)
     exe = tmp_path / name
     exe.write_bytes(b"12345")
     return pipeline.release_notes(str(tmp_path), "App 1.0.0", None, commit,

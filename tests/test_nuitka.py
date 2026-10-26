@@ -111,6 +111,40 @@ def test_the_lock_file_keeps_its_asset_label(tmp_path):
     assert builder.lock_files() == [(str(lock), "requirements.lock.txt")]
 
 
+# macOS app bundles
+
+def _dist(tmp_path, monkeypatch, bare_newer=None):
+    """dist/Muse.app on macOS, plus a bare dist/Muse when *bare_newer* is given."""
+    monkeypatch.setattr(nuitka.sys, "platform", "darwin")
+    (tmp_path / "build_exe.py").write_text("", encoding="utf-8")
+    bundle = tmp_path / "dist" / "Muse.app"
+    (bundle / "Contents" / "MacOS").mkdir(parents=True)
+    os.utime(bundle, (1000, 1000))
+    if bare_newer is not None:
+        bare = tmp_path / "dist" / "Muse"
+        bare.write_bytes(b"x")
+        os.chmod(bare, 0o755)
+        os.utime(bare, (2000, 2000) if bare_newer else (500, 500))
+    return nuitka.NuitkaBuilder(str(tmp_path), {}, Options())
+
+
+def test_an_app_bundle_is_found_on_macos(tmp_path, monkeypatch):
+    artifacts = _dist(tmp_path, monkeypatch).artifacts()
+    assert [(a.product, a.kind, os.path.basename(a.path)) for a in artifacts] == [("Muse", "dir", "Muse.app")]
+
+
+def test_the_bundle_wins_over_an_older_bare_executable_silently(tmp_path, monkeypatch, caplog):
+    artifacts = _dist(tmp_path, monkeypatch, bare_newer=False).artifacts()
+    assert [os.path.basename(a.path) for a in artifacts] == ["Muse.app"]
+    assert "Both" not in caplog.text
+
+
+def test_a_newer_bare_executable_beside_the_bundle_is_warned_about(tmp_path, monkeypatch, caplog):
+    artifacts = _dist(tmp_path, monkeypatch, bare_newer=True).artifacts()
+    assert [os.path.basename(a.path) for a in artifacts] == ["Muse.app"]
+    assert "Both" in caplog.text
+
+
 # Preflight
 
 def _host(monkeypatch, platform, commands=(), xcode=True):

@@ -2,6 +2,7 @@
 
 import builtins
 import os
+import subprocess
 
 import pytest
 
@@ -337,7 +338,7 @@ def test_nothing_is_rebuilt_from_a_dirty_checkout(tmp_path, monkeypatch):
 
 # stage
 
-def test_one_platform_is_staged_as_before(tmp_path):
+def test_one_platform_is_staged_under_release_names(tmp_path):
     exe = tmp_path / "App.exe"
     exe.write_bytes(b"gui")
     headless = tmp_path / "AppHeadless.exe"
@@ -371,7 +372,7 @@ def test_several_platforms_get_a_checksums_file_each(tmp_path):
     downloads, sums = pipeline.stage(str(tmp_path / "out"), "tool", "1.0.0", "cuda", artifacts,
                                      [(str(lock), "Cargo.lock")])
     names = [a.name for a in downloads]
-    assert "tool-1.0.0-linux-x64-cuda" in names
+    assert "tool-1.0.0-linux-x64-cuda.tar.gz" in names
     assert "tool-1.0.0-windows-x64-cuda.exe" in names
     assert "toolgem-1.0.0-cuda.gem" in names
     # The lock file of a build for several platforms is named for none.
@@ -391,6 +392,81 @@ def test_a_directory_is_zipped(tmp_path):
     assert downloads[0].name == "App-1.0.0-linux-x64.zip"
     with zipfile.ZipFile(downloads[0].path) as archive:
         assert "App/app.bin" in archive.namelist()
+
+
+def test_a_unix_executable_is_staged_as_an_executable_tar_gz(tmp_path):
+    import tarfile
+
+    tool = tmp_path / "tool"
+    tool.write_bytes(b"elf")
+    os.chmod(tool, 0o600)
+    downloads, sums = pipeline.stage(str(tmp_path / "out"), "tool", "1.0.0", None,
+                                     [Artifact("tool", str(tool), EXECUTABLE, "linux-x64")], [])
+    assert downloads[0].name == "tool-1.0.0-linux-x64.tar.gz"
+    with tarfile.open(downloads[0].path) as archive:
+        member = archive.getmember("tool")
+        assert member.mode == 0o755 and archive.extractfile(member).read() == b"elf"
+    assert "tool-1.0.0-linux-x64.tar.gz" in (tmp_path / "out" / sums[0].name).read_text(encoding="utf-8")
+
+
+def test_unix_executables_stay_bare_when_archiving_is_off(tmp_path):
+    tool = tmp_path / "tool"
+    tool.write_bytes(b"elf")
+    downloads, _ = pipeline.stage(str(tmp_path / "out"), "tool", "1.0.0", None,
+                                  [Artifact("tool", str(tool), EXECUTABLE, "macos-arm64")], [],
+                                  archive_unix=False)
+    assert downloads[0].name == "tool-1.0.0-macos-arm64"
+
+
+def test_an_app_bundle_is_zipped_with_ditto(tmp_path, monkeypatch):
+    bundle = tmp_path / "Muse.app"
+    (bundle / "Contents").mkdir(parents=True)
+    monkeypatch.setattr(pipeline.shutil, "which", lambda name: f"/usr/bin/{name}")
+    calls = []
+    target = tmp_path / "out" / "Muse-1.0.0-macos-arm64.zip"
+
+    def fake_ditto(args, **kwargs):
+        calls.append(args)
+        target.write_bytes(b"zip")
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setattr(pipeline.subprocess, "run", fake_ditto)
+    downloads, _ = pipeline.stage(str(tmp_path / "out"), "Muse", "1.0.0", None,
+                                  [Artifact("Muse", str(bundle), DIRECTORY, "macos-arm64")], [])
+    assert downloads[0].name == "Muse-1.0.0-macos-arm64.zip"
+    assert calls == [["ditto", "-c", "-k", "--keepParent", str(bundle), str(target)]]
+
+
+def test_an_app_bundle_without_ditto_is_refused(tmp_path, monkeypatch):
+    bundle = tmp_path / "Muse.app"
+    bundle.mkdir()
+    monkeypatch.setattr(pipeline.shutil, "which", lambda name: None)
+    with pytest.raises(SystemExit) as exited:
+        pipeline.stage(str(tmp_path / "out"), "Muse", "1.0.0", None,
+                       [Artifact("Muse", str(bundle), DIRECTORY, "macos-arm64")], [])
+    assert "ditto" in str(exited.value.code)
+
+
+def test_staged_assets_over_the_limit_are_reported(tmp_path):
+    from app_release.model import Asset
+    small, large = tmp_path / "small", tmp_path / "large"
+    small.write_bytes(b"x")
+    large.write_bytes(b"x" * 10)
+    errors = pipeline.staged_too_large([Asset("small", str(small)), Asset("large", str(large))], 5)
+    assert len(errors) == 1 and errors[0].startswith("large is")
+    assert pipeline.staged_too_large([Asset("large", str(large))], None) == []
+
+
+def test_a_large_folder_is_flagged_before_staging(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", fake_git())
+    record, _ = built(tmp_path, commit=HEAD)
+    folder = tmp_path / "Muse.app"
+    folder.mkdir()
+    (folder / "big").write_bytes(b"x" * 10)
+    os.utime(folder, (record.written_at + 10, record.written_at + 10))
+    errors, warnings = pipeline.check(str(tmp_path), "1.0.0", "v1.0.0", record,
+                                      [Artifact("Muse", str(folder), DIRECTORY, "macos-arm64")], None, {}, 5)
+    assert errors == [] and any("checked against the asset limit" in w for w in warnings)
 
 
 def test_two_artifacts_under_one_name_are_refused(tmp_path):
@@ -418,8 +494,12 @@ def test_checksum_files_name_the_platforms_built():
 
 # release notes
 
-def _notes(tmp_path, monkeypatch, record=None, artifacts=None, **kwargs):
+def _notes(tmp_path, monkeypatch, record=None, artifacts=None, signed=False, glibc="", host="windows-x64",
+           **kwargs):
     monkeypatch.setattr(vcs, "git", lambda repo, *args: None)
+    monkeypatch.setattr(pipeline, "developer_id_signed", lambda path: signed)
+    monkeypatch.setattr(pipeline.platforms, "glibc_version", lambda: glibc)
+    monkeypatch.setattr(pipeline.platforms, "host", lambda: host)
     exe = tmp_path / "App.exe"
     exe.write_bytes(b"x")
     artifacts = artifacts or [Artifact("App", str(exe), EXECUTABLE, "windows-x64")]
@@ -449,6 +529,50 @@ def test_the_smartscreen_line_is_for_windows_executables_only(tmp_path, monkeypa
     notes = _notes(tmp_path, monkeypatch, artifacts=[Artifact("tool", str(linux), EXECUTABLE, "linux-x64")])
     assert "SmartScreen" not in notes
     assert "SmartScreen" not in _notes(tmp_path, monkeypatch, notes_config={"unsigned_windows": False})
+
+
+def _part(notes, platform):
+    start = notes.index(f"<!-- app-release:platform {platform} ")
+    return notes[start:notes.index("<!-- /app-release:platform -->", start)]
+
+
+def _mac_and_linux(tmp_path):
+    bundle = tmp_path / "App.app"
+    bundle.mkdir(exist_ok=True)
+    tool = tmp_path / "App"
+    tool.write_bytes(b"x")
+    return [Artifact("App", str(bundle), DIRECTORY, "macos-arm64"), Artifact("App", str(tool), EXECUTABLE, "linux-x64")]
+
+
+def test_the_gatekeeper_line_is_in_the_macos_part_of_an_unsigned_build(tmp_path, monkeypatch):
+    notes = _notes(tmp_path, monkeypatch, artifacts=_mac_and_linux(tmp_path))
+    assert "Open Anyway" in _part(notes, "macos-arm64") and "Open Anyway" not in _part(notes, "linux-x64")
+    assert "Open Anyway" not in _notes(tmp_path, monkeypatch, artifacts=_mac_and_linux(tmp_path), signed=True)
+    assert "Open Anyway" not in _notes(tmp_path, monkeypatch, artifacts=_mac_and_linux(tmp_path),
+                                       notes_config={"unsigned_macos": False})
+
+
+def test_the_glibc_line_is_for_a_linux_build_made_on_this_machine(tmp_path, monkeypatch):
+    notes = _notes(tmp_path, monkeypatch, artifacts=_mac_and_linux(tmp_path), glibc="2.35", host="linux-x64")
+    assert "- Needs glibc 2.35 or newer." in _part(notes, "linux-x64")
+    assert "glibc" not in _part(notes, "macos-arm64")
+    assert "glibc" not in _notes(tmp_path, monkeypatch, artifacts=_mac_and_linux(tmp_path), glibc="2.35",
+                                 host="macos-arm64")
+    assert "glibc" not in _notes(tmp_path, monkeypatch, artifacts=_mac_and_linux(tmp_path), glibc="2.35",
+                                 host="linux-x64", notes_config={"linux_glibc": False})
+
+
+def test_developer_id_signed_reads_codesign(monkeypatch):
+    def codesign(stderr, returncode=0):
+        monkeypatch.setattr(pipeline.subprocess, "run", lambda args, **kwargs: subprocess.CompletedProcess(
+            args, returncode, stdout="", stderr=stderr))
+
+    codesign("Authority=Developer ID Application: Tom (ABC)\nAuthority=Apple Root CA\n")
+    assert pipeline.developer_id_signed("App.app")
+    codesign("Signature=adhoc\n")
+    assert not pipeline.developer_id_signed("App.app")
+    codesign("App: code object is not signed at all\n", returncode=1)
+    assert not pipeline.developer_id_signed("App.app")
 
 
 def test_extra_and_builder_lines_are_added(tmp_path, monkeypatch):
