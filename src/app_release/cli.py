@@ -16,12 +16,19 @@ is taken to be built by a Nuitka ``build_exe.py`` and released on GitHub.
 ``--bump`` first raises that part of the version (1.4.2 -> 2.0.0, 1.5.0 or
 1.4.3) and commits the version file alone, once tag v<version> exists: a rerun
 before the new version is tagged keeps it. It needs a clean checkout, and the
-artifacts are then rebuilt, since they embed the version.
+artifacts are then rebuilt, since they embed the version. It refuses while
+the current version's release is still a draft (other platforms may be adding
+to it), unless ``--force``.
+
+Before bumping or building, it fetches the branch's upstream and stops when
+the checkout is behind it ("pull first"; ``--force`` goes ahead).
 
 First it rebuilds the artifacts that are behind the checkout's HEAD, with the
 arguments after ``--`` added to each build command (e.g. ``-- --jobs=4``), plus
 the option of each feature the last build had (Nuitka: ``--with-oqs``). It
-builds nothing while tracked files have uncommitted changes. ``--no-build``
+builds nothing while tracked files have uncommitted changes, nor when the
+machine lacks what the build needs (the builder's ``requires`` commands;
+Nuitka: a C compiler). ``--no-build``
 skips this step; ``--build-info FILE`` first puts back the build record the
 artifacts were built with.
 
@@ -120,6 +127,43 @@ def _destinations(repo, config, opts) -> list:
     return [DESTINATIONS[n](repo, config) for n in names]
 
 
+def _check_up_to_date(repo, opts) -> None:
+    """Exit when the branch's upstream has commits the checkout lacks, such as
+    a version bump pushed from another machine."""
+    upstream = vcs.upstream(repo)
+    if not upstream:
+        logger.info("The checkout's branch has no upstream; not checking that it is up to date.")
+        return
+    behind = vcs.commits_behind_upstream(repo)
+    if behind is None:
+        if not opts.no_upload:
+            sys.exit(f"Cannot fetch {upstream} to check that the checkout is up to date.")
+        logger.warning(f"Cannot fetch {upstream}: not checking that the checkout is up to date.")
+    elif behind:
+        message = f"{upstream} has {behind} commit(s) this checkout lacks; pull first."
+        if not opts.force:
+            sys.exit(message + " (--force goes ahead without them.)")
+        logger.warning(message + " Going ahead without them (--force).")
+
+
+def _check_no_draft(tag, destinations, opts) -> None:
+    """Exit when --bump would start a new version while release *tag* is a
+    draft that other platforms may still be adding to."""
+    for destination in destinations:
+        draft = destination.draft_in_progress(tag)
+        if draft is None:
+            message = f"Cannot tell whether {tag} is a draft release on {destination.name}"
+            if not opts.no_upload:
+                sys.exit(message + "; not bumping.")
+            logger.warning(message + "; bumping anyway (--no-upload).")
+        elif draft:
+            message = (f"{tag} is a draft release in progress on {destination.name}; build it on the "
+                       "remaining platforms, or publish it, before bumping")
+            if not opts.force:
+                sys.exit(message + " (--force bumps anyway).")
+            logger.warning(message + "; bumping anyway (--force).")
+
+
 def _confirm(question: str) -> bool:
     return input(f"{question} [y/N] ").strip().lower() in ("y", "yes")
 
@@ -166,7 +210,10 @@ def main(argv=None) -> None:
         # Also checked before publishing; this saves a long build that could not be uploaded.
         for destination in destinations:
             destination.check_ready()
+    _check_up_to_date(repo, opts)
 
+    if opts.bump and vcs.tagged_commit(repo, f"v{version}"):
+        _check_no_draft(f"v{version}", destinations, opts)
     if opts.bump:
         version = bump(repo, version_source, version, opts.bump, opts.no_build)
     tag = f"v{version}"

@@ -42,6 +42,32 @@ def _release(tmp_path, publish=False):
                        assets=[Asset(asset.name, str(asset))], notes="RELEASE_NOTES.md", publish=publish)
 
 
+def _view(monkeypatch, returncode=0, stdout="", stderr=""):
+    monkeypatch.setattr(github.shutil, "which", lambda name: "gh")
+    monkeypatch.setattr(github.subprocess, "run", lambda args, **kwargs: subprocess.CompletedProcess(
+        args, returncode, stdout=stdout, stderr=stderr))
+
+
+@pytest.mark.parametrize("returncode, stdout, stderr, expected", [
+    (0, json.dumps({"isDraft": True}), "", True),
+    (0, json.dumps({"isDraft": False}), "", False),
+    (1, "", "release not found", False),
+    (1, "", "HTTP 502: Bad Gateway", None),
+])
+def test_draft_in_progress(tmp_path, monkeypatch, returncode, stdout, stderr, expected):
+    _view(monkeypatch, returncode, stdout, stderr)
+    assert github.GitHubRelease(str(tmp_path), {}).draft_in_progress("v1.0.0") is expected
+
+
+def test_draft_in_progress_is_unknown_without_gh(tmp_path, monkeypatch):
+    monkeypatch.setattr(github.shutil, "which", lambda name: None)
+    assert github.GitHubRelease(str(tmp_path), {}).draft_in_progress("v1.0.0") is None
+
+
+def test_no_destination_has_no_draft(tmp_path):
+    assert none.NoDestination(str(tmp_path), {}).draft_in_progress("v1.0.0") is False
+
+
 def test_not_logged_in_stops(tmp_path, monkeypatch):
     calls = _gh(monkeypatch, logged_in=False)
     with pytest.raises(SystemExit) as excinfo:

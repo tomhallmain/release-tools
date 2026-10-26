@@ -17,7 +17,7 @@ def fake_git(head=HEAD, tree=TREE, ancestors=(), tag=None, answers=None):
     """A stand-in for vcs.git that knows HEAD, its tree, which commits are
     ancestors of HEAD, what an existing tag points at, and any other *answers*
     ({args tuple: output})."""
-    def git(repo, *args):
+    def git(repo, *args, timeout=None):
         if answers and args in answers:
             return answers[args]
         if args == ("rev-parse", "HEAD"):
@@ -32,12 +32,24 @@ def fake_git(head=HEAD, tree=TREE, ancestors=(), tag=None, answers=None):
     return git
 
 
-def checkout_git(head=HEAD, tree=TREE, dirty=False, ancestors=()):
+def checkout_git(head=HEAD, tree=TREE, dirty=False, ancestors=(), answers=None):
     """fake_git for a checkout whose state rebuild_stale reads."""
     return fake_git(head=head, tree=tree, ancestors=ancestors, answers={
         ("log", "-1", "--format=%ct"): "0",
         ("status", "--porcelain", "--untracked-files=no"): " M file" if dirty else "",
+        **(answers or {}),
     })
+
+
+UPSTREAM = ("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+
+
+def upstream_answers(behind=0, fetched=True):
+    """checkout_git answers for a branch tracking origin/main, *behind* commits behind it."""
+    answers = {UPSTREAM: "origin/main", ("rev-list", "--count", "HEAD..@{upstream}"): str(behind)}
+    if fetched:
+        answers[("fetch", "--quiet")] = ""
+    return answers
 
 
 def write_record(folder, commit=BUILT, tree=TREE, changes="", version="1.0.0", **extra):

@@ -1,6 +1,7 @@
 """The build system seam: where artifacts are, how to rebuild them, and where
 their build record is."""
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -89,6 +90,17 @@ class Builder(ABC):
         records.restore(source, self.record_path(), artifacts)
 
     # Building.
+
+    def preflight(self) -> None:
+        """Exit, before a build starts, when this host lacks what the build
+        needs: each command in this builder's ``requires`` setting."""
+        required = self.config.get("requires", [])
+        if not isinstance(required, list) or not all(isinstance(c, str) for c in required):
+            sys.exit(f"Configuration: [{self.name}] requires must be a list of command names, not {required!r}.")
+        missing = [command for command in required if not shutil.which(command)]
+        if missing:
+            sys.exit(f"The build needs {', '.join(missing)}, not found on this machine's PATH "
+                     f"([{self.name}] requires); install it and run this again.")
 
     @abstractmethod
     def plan(self, stale: list, record) -> list:

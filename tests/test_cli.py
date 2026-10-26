@@ -9,7 +9,7 @@ import pytest
 from app_release import cli, vcs
 from app_release.builders.nuitka import NuitkaBuilder
 from app_release.destinations.github import GitHubRelease
-from helpers import HEAD, checkout_git, write_record
+from helpers import HEAD, checkout_git, upstream_answers, write_record
 
 
 def _opts(*argv):
@@ -110,6 +110,75 @@ def test_an_unreachable_remote_stops_an_upload_before_the_build(tmp_path, monkey
     with pytest.raises(SystemExit) as exited:
         _main(str(tmp_path), "--destination", "none")
     assert "Cannot reach the git remote origin" in str(exited.value.code)
+
+
+def test_a_checkout_behind_its_upstream_stops_before_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git(answers=upstream_answers(behind=2)))
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    _nuitka_app(tmp_path)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path), "--no-upload")
+    assert "origin/main has 2 commit(s)" in str(exited.value.code) and "pull first" in str(exited.value.code)
+
+
+def test_force_goes_ahead_behind_the_upstream(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git(answers=upstream_answers(behind=2)))
+    _nuitka_app(tmp_path)
+    _main(str(tmp_path), "--no-build", "--no-upload", "--force")
+    assert (tmp_path / "dist" / "release" / "v1.0.0").is_dir()
+
+
+def test_a_failed_fetch_stops_an_upload_but_not_a_trial(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git(answers=upstream_answers(fetched=False)))
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    _nuitka_app(tmp_path)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path), "--destination", "none")
+    assert "Cannot fetch origin/main" in str(exited.value.code)
+    _main(str(tmp_path), "--no-build", "--no-upload")
+    assert (tmp_path / "dist" / "release" / "v1.0.0").is_dir()
+
+
+def test_an_up_to_date_checkout_goes_ahead(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git(answers=upstream_answers(behind=0)))
+    _nuitka_app(tmp_path)
+    _main(str(tmp_path), "--no-build", "--no-upload")
+    assert (tmp_path / "dist" / "release" / "v1.0.0").is_dir()
+
+
+def _tagged_with_draft(tmp_path, monkeypatch, draft):
+    """An app whose current version 1.0.0 is tagged, with GitHub reporting *draft* for it."""
+    monkeypatch.setattr(vcs, "git", checkout_git(answers={
+        ("rev-parse", "-q", "--verify", "refs/tags/v1.0.0"): HEAD,
+        ("rev-parse", "-q", "--verify", "refs/tags/v1.0.0^{commit}"): HEAD}))
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    monkeypatch.setattr(GitHubRelease, "draft_in_progress", lambda self, tag: draft)
+    _nuitka_app(tmp_path)
+
+
+def test_bump_is_refused_while_the_current_version_is_a_draft(tmp_path, monkeypatch):
+    _tagged_with_draft(tmp_path, monkeypatch, draft=True)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path), "--bump", "minor", "--no-upload")
+    assert "v1.0.0 is a draft release in progress" in str(exited.value.code)
+    assert (tmp_path / "VERSION").read_text(encoding="utf-8") == "1.0.0\n"
+
+
+def test_an_unknown_draft_state_stops_a_bump_that_will_upload(tmp_path, monkeypatch):
+    _tagged_with_draft(tmp_path, monkeypatch, draft=None)
+    monkeypatch.setattr(GitHubRelease, "check_ready", lambda self: None)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path), "--bump", "minor")
+    assert "Cannot tell whether v1.0.0 is a draft" in str(exited.value.code)
+    assert (tmp_path / "VERSION").read_text(encoding="utf-8") == "1.0.0\n"
+
+
+def test_bump_goes_ahead_when_the_current_version_is_published(tmp_path, monkeypatch):
+    bumped = []
+    monkeypatch.setattr(cli, "bump", lambda repo, source, version, part, no_build: bumped.append(part) or version)
+    _tagged_with_draft(tmp_path, monkeypatch, draft=False)
+    _main(str(tmp_path), "--bump", "minor", "--no-build", "--no-upload")
+    assert bumped == ["minor"]
 
 
 def test_a_missing_gh_stops_an_upload_before_the_build(tmp_path, monkeypatch):

@@ -8,10 +8,11 @@ gets this package's memory-wait plugin in ``NUITKA_MEMORY_WAIT_PLUGIN``.
 """
 import os
 import re
+import shutil
 import sys
 
 from app_release import platforms
-from app_release.builders.base import Builder, APP
+from app_release.builders.base import Builder, APP, run_version
 from app_release.builders.toolchains import build_python
 from app_release.log import logger
 from app_release.model import EXECUTABLE, Artifact, BuildRun
@@ -106,6 +107,17 @@ class NuitkaBuilder(Builder):
     def note_lines(self, record) -> list:
         return ["- At its first start the executable unpacks its runtime into the app's data folder; "
                 "later starts of the same build reuse it."]
+
+    def preflight(self) -> None:
+        super().preflight()
+        # On Windows Nuitka finds MSVC or downloads MinGW itself.
+        if sys.platform == "darwin":
+            # /usr/bin/cc exists without the Command Line Tools, as a stub that offers to install them.
+            if run_version(["xcode-select", "-p"]) is None:
+                sys.exit("Nuitka needs a C compiler: install the Xcode Command Line Tools "
+                         "(xcode-select --install) and run this again.")
+        elif sys.platform != "win32" and not any(shutil.which(c) for c in ("cc", "gcc", "clang")):
+            sys.exit("Nuitka needs a C compiler (gcc or clang); install one and run this again.")
 
     def plan(self, stale: list, record) -> list:
         with open(self._script(), "r", encoding="utf-8") as f:

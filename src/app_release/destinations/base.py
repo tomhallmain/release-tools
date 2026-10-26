@@ -22,6 +22,11 @@ class Destination(ABC):
         """Exit, before anything runs, when the destination cannot be reached
         (its CLI missing, not logged in)."""
 
+    def draft_in_progress(self, tag: str):
+        """Whether release *tag* exists here unpublished, so other platforms
+        may still be adding to it; None when it cannot tell."""
+        return False
+
     @abstractmethod
     def plan(self, release) -> list:
         """The commands, run in the repo, that put *release* (a ReleasePlan)

@@ -19,6 +19,9 @@ defaults, which are those of a Nuitka-built app released on GitHub.
     unsigned_windows = true            # the SmartScreen line for Windows executables
 
     [<builder or destination name>]    # that backend's own settings
+
+    [nuitka]                           # any builder's table
+    requires = ["vlc"]                 # commands the build needs on PATH, checked before it starts
 """
 import os
 import sys

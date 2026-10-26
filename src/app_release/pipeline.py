@@ -78,6 +78,7 @@ def rebuild_stale(repo, version, artifacts, builder, record, build_args, feature
     if dirty:
         sys.exit("Tracked files have uncommitted changes; commit or stash them, so the build "
                  "matches a commit, and run this again.")
+    builder.preflight()
     runs = builder.plan(stale, record)
     builder.build(runs, build_args, version, recorded_features(features, build_args))
     return True

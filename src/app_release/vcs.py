@@ -10,10 +10,13 @@ import sys
 from app_release.log import logger
 
 
-def git(repo: str, *args: str):
+FETCH_TIMEOUT = 600
+
+
+def git(repo: str, *args: str, timeout: int = 30):
     """git's stripped stdout, or None when git is missing or the command fails."""
     try:
-        result = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, timeout=30)
+        result = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError):
         return None
     return result.stdout.strip() if result.returncode == 0 else None
@@ -41,6 +44,21 @@ def remote_tagged_commit(repo: str, tag: str, remote: str):
         refs[name] = sha
     # An annotated tag is listed twice; only its peeled ^{} line names the commit.
     return refs.get(f"refs/tags/{tag}^{{}}") or refs.get(f"refs/tags/{tag}") or ""
+
+
+def upstream(repo: str):
+    """The upstream of the checkout's branch, e.g. "origin/main", or None."""
+    return git(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+
+
+def commits_behind_upstream(repo: str):
+    """How many commits the upstream of the checkout's branch has that HEAD
+    lacks, after fetching it; None when the fetch fails."""
+    # Without a remote, fetch uses the branch's own (branch.<name>.remote).
+    if git(repo, "fetch", "--quiet", timeout=FETCH_TIMEOUT) is None:
+        return None
+    count = git(repo, "rev-list", "--count", "HEAD..@{upstream}")
+    return int(count) if count and count.isdigit() else None
 
 
 def dirty(repo: str):

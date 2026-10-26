@@ -111,6 +111,58 @@ def test_the_lock_file_keeps_its_asset_label(tmp_path):
     assert builder.lock_files() == [(str(lock), "requirements.lock.txt")]
 
 
+# Preflight
+
+def _host(monkeypatch, platform, commands=(), xcode=True):
+    """Pretend to run on *platform* with only *commands* on PATH."""
+    monkeypatch.setattr(nuitka.sys, "platform", platform)
+    monkeypatch.setattr(nuitka.shutil, "which", lambda c: f"/usr/bin/{c}" if c in commands else None)
+    monkeypatch.setattr(nuitka, "run_version", lambda command: "/Library/Developer" if xcode else None)
+
+
+def _configured(tmp_path, **settings):
+    (tmp_path / "build_exe.py").write_text("", encoding="utf-8")
+    return nuitka.NuitkaBuilder(str(tmp_path), {"nuitka": settings}, Options())
+
+
+def test_preflight_passes_with_a_compiler_and_the_required_commands(tmp_path, monkeypatch):
+    _host(monkeypatch, "linux", commands={"gcc", "vlc"})
+    _configured(tmp_path, requires=["vlc"]).preflight()
+
+
+def test_preflight_names_a_missing_required_command(tmp_path, monkeypatch):
+    _host(monkeypatch, "linux", commands={"gcc"})
+    with pytest.raises(SystemExit) as exited:
+        _configured(tmp_path, requires=["vlc"]).preflight()
+    assert "vlc" in str(exited.value.code)
+
+
+def test_preflight_refuses_requires_that_is_not_a_list(tmp_path, monkeypatch):
+    _host(monkeypatch, "linux", commands={"gcc", "vlc"})
+    with pytest.raises(SystemExit) as exited:
+        _configured(tmp_path, requires="vlc").preflight()
+    assert "list of command names" in str(exited.value.code)
+
+
+def test_preflight_needs_a_compiler_on_linux(tmp_path, monkeypatch):
+    _host(monkeypatch, "linux")
+    with pytest.raises(SystemExit) as exited:
+        _configured(tmp_path).preflight()
+    assert "C compiler" in str(exited.value.code)
+
+
+def test_preflight_needs_the_command_line_tools_on_macos(tmp_path, monkeypatch):
+    _host(monkeypatch, "darwin", commands={"cc"}, xcode=False)
+    with pytest.raises(SystemExit) as exited:
+        _configured(tmp_path).preflight()
+    assert "xcode-select --install" in str(exited.value.code)
+
+
+def test_preflight_leaves_the_compiler_to_nuitka_on_windows(tmp_path, monkeypatch):
+    _host(monkeypatch, "win32")
+    _configured(tmp_path).preflight()
+
+
 def test_defaults_carry_oqs_and_the_torch_hint():
     assert nuitka.NuitkaBuilder.default_features["oqs"]["rebuild_option"] == "--with-oqs"
     assert nuitka.NuitkaBuilder.default_variant_hints["torch"]["variant"] == "cuda"

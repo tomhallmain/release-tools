@@ -279,9 +279,16 @@ def test_an_absent_feature_adds_nothing(tmp_path):
 class _Builder:
     """Records what rebuild_stale asks of a builder."""
 
-    def __init__(self):
+    def __init__(self, ready=True):
+        self.ready = ready
+        self.preflighted = False
         self.planned = None
         self.built = None
+
+    def preflight(self):
+        self.preflighted = True
+        if not self.ready:
+            raise SystemExit("not ready")
 
     def plan(self, stale, record):
         self.planned = [a.product for a in stale]
@@ -307,7 +314,16 @@ def test_nothing_is_rebuilt_when_current(tmp_path, monkeypatch):
     record, artifact = built(tmp_path, commit=HEAD)
     builder = _Builder()
     assert pipeline.rebuild_stale(str(tmp_path), "1.0.0", [artifact], builder, record, [], {}) is False
-    assert builder.planned is None
+    assert builder.planned is None and not builder.preflighted
+
+
+def test_a_failed_preflight_stops_before_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git(tree="u" * 40))
+    record, artifact = built(tmp_path)
+    builder = _Builder(ready=False)
+    with pytest.raises(SystemExit):
+        pipeline.rebuild_stale(str(tmp_path), "1.0.0", [artifact], builder, record, [], {})
+    assert builder.preflighted and builder.planned is None and builder.built is None
 
 
 def test_nothing_is_rebuilt_from_a_dirty_checkout(tmp_path, monkeypatch):

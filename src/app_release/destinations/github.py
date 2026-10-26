@@ -46,6 +46,15 @@ class GitHubRelease(Destination):
         if subprocess.run(["gh", "auth", "status"], cwd=self.repo, capture_output=True).returncode != 0:
             sys.exit("gh is not logged in to GitHub; run `gh auth login` (or set GH_TOKEN) and run this again.")
 
+    def draft_in_progress(self, tag: str):
+        if not shutil.which("gh"):
+            return None
+        found = subprocess.run(["gh", "release", "view", tag, "--json", "isDraft"],
+                               cwd=self.repo, capture_output=True, text=True)
+        if found.returncode != 0:
+            return False if "release not found" in found.stderr else None
+        return bool(json.loads(found.stdout).get("isDraft"))
+
     def _create(self, release, files) -> list:
         return ["gh", "release", "create", release.tag, *files, "--title", release.title,
                 "--notes-file", release.notes, "--draft", "--verify-tag"]

@@ -90,6 +90,23 @@ def test_retag_does_not_force_push_an_annotated_tag_already_on_the_build(tmp_pat
     assert vcs.tag_steps(str(tmp_path), "v1.0.0", HEAD, "origin", retag=True) == []
 
 
+def test_commits_behind_upstream_fetches_with_the_long_timeout(tmp_path, monkeypatch):
+    timeouts = {}
+
+    def git(repo, *args, timeout=30):
+        timeouts[args[0]] = timeout
+        return {"fetch": "", "rev-list": "3"}.get(args[0])
+
+    monkeypatch.setattr(vcs, "git", git)
+    assert vcs.commits_behind_upstream(str(tmp_path)) == 3
+    assert timeouts["fetch"] == vcs.FETCH_TIMEOUT
+
+
+def test_commits_behind_upstream_is_none_when_the_fetch_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", lambda repo, *args, timeout=30: "0" if args[0] == "rev-list" else None)
+    assert vcs.commits_behind_upstream(str(tmp_path)) is None
+
+
 def test_changes_fingerprint(tmp_path, monkeypatch):
     answers = {("status", "--porcelain", "--untracked-files=no"): "", ("diff", "HEAD"): "diff"}
     monkeypatch.setattr(vcs, "git", lambda repo, *args: answers.get(args))
