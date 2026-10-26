@@ -61,5 +61,14 @@ def test_app_name(products, name):
     assert config.app_name({}, products) == name
 
 
+def test_platforms_default_to_none_and_must_be_a_list_of_names():
+    assert config.platforms({}) == []
+    assert config.platforms({"platforms": ["linux-x64"]}) == ["linux-x64"]
+    assert "platforms" not in config.unknown_keys({"platforms": []}, set())
+    for bad in ("linux-x64", [""], [1]):
+        with pytest.raises(SystemExit):
+            config.platforms({"platforms": bad})
+
+
 def test_configured_app_name_wins():
     assert config.app_name({"app_name": "SD Runner"}, ["SDRunner"]) == "SD Runner"

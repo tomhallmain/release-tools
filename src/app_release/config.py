@@ -7,6 +7,7 @@ defaults, which are those of a Nuitka-built app released on GitHub.
     version = "VERSION"                # see versions.py; default: the builder's
     app_name = "SDRunner"              # default: shortest product minus a secondary suffix
     secondary_suffixes = ["Headless"]
+    platforms = ["windows-x64", "macos-arm64", "linux-x64"]   # what --publish requires; default: none
 
     [features]                         # merged onto the builder's; false removes one
     oqs = { rebuild_option = "--with-oqs", note = "OQS (post-quantum) encryption" }
@@ -30,7 +31,7 @@ import tomllib
 RELEASE_TOML = "release.toml"
 PYPROJECT = "pyproject.toml"
 KNOWN_KEYS = {"builder", "destinations", "version", "app_name", "secondary_suffixes",
-              "features", "variant_hints", "notes"}
+              "platforms", "features", "variant_hints", "notes"}
 
 
 def _read_toml(path: str) -> dict:
@@ -72,6 +73,16 @@ def merged(defaults: dict, overrides) -> dict:
         else:
             result[name] = value
     return result
+
+
+def platforms(config: dict) -> list:
+    """The platforms a release must have before --publish, e.g. "macos-arm64";
+    [] when unset (a single-platform app needs none)."""
+    value = config.get("platforms", [])
+    if not isinstance(value, list) or not all(isinstance(p, str) and p for p in value):
+        sys.exit(f"Configuration: platforms must be a list of platform names such as \"linux-x64\", "
+                 f"not {value!r}.")
+    return value
 
 
 def app_name(config: dict, products) -> str:

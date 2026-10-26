@@ -1,7 +1,9 @@
 """app_release.cli: choosing the backends, and a whole run to staging with
 --no-upload (git stubbed, nothing built)."""
 
+import json
 import os
+import subprocess
 import sys
 
 import pytest
@@ -179,6 +181,29 @@ def test_bump_goes_ahead_when_the_current_version_is_published(tmp_path, monkeyp
     _tagged_with_draft(tmp_path, monkeypatch, draft=False)
     _main(str(tmp_path), "--bump", "minor", "--no-build", "--no-upload")
     assert bumped == ["minor"]
+
+
+def test_status_runs_only_reading_commands(tmp_path, monkeypatch, capsys):
+    git_calls, gh_calls = [], []
+    answers = {("ls-remote", "origin", "refs/tags/v1.0.0", "refs/tags/v1.0.0^{}"): f"{HEAD}\trefs/tags/v1.0.0"}
+    fake = checkout_git(answers=answers)
+    monkeypatch.setattr(vcs, "git", lambda repo, *args, **kw: git_calls.append(args) or fake(repo, *args))
+    from app_release.destinations import github
+    monkeypatch.setattr(github.shutil, "which", lambda name: "gh")
+    monkeypatch.setattr(github.subprocess, "run", lambda args, **kw: gh_calls.append(args) or
+                        subprocess.CompletedProcess(args, 0, stderr="", stdout=json.dumps(
+                            {"isDraft": True, "body": "", "assets": [
+                                {"name": "SHA256SUMS-1.0.0-windows-x64.txt", "size": 1}]})))
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    _nuitka_app(tmp_path)
+    (tmp_path / "release.toml").write_text('platforms = ["windows-x64", "linux-x64"]\n', encoding="utf-8")
+    _main(str(tmp_path), "--status")
+    out = capsys.readouterr().out
+    assert "Tag v1.0.0: here absent; on origin at " + HEAD[:10] in out
+    assert "is a draft" in out and "missing: linux-x64" in out
+    assert {args[0] for args in git_calls} <= {"rev-parse", "ls-remote"}
+    assert gh_calls and all(args[:3] == ["gh", "release", "view"] for args in gh_calls)
+    assert not (tmp_path / "dist" / "release").exists()
 
 
 def test_a_missing_gh_stops_an_upload_before_the_build(tmp_path, monkeypatch):

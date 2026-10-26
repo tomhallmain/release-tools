@@ -218,6 +218,20 @@ def stage(out_dir, app_name, version, variant, artifacts, lock_files) -> tuple:
     return downloads, sums
 
 
+def checksum_platforms(names, version: str) -> set:
+    """The ``<platform>[-<variant>]`` of each ``SHA256SUMS-<version>-...txt`` in
+    *names*: one per platform built, since each build writes exactly one."""
+    prefix, end = f"SHA256SUMS-{version}-", ".txt"
+    return {n[len(prefix):-len(end)] for n in names if n.startswith(prefix) and n.endswith(end)}
+
+
+def missing_platforms(names, version: str, required) -> list:
+    """The platforms in *required* with no checksums file among *names*; any
+    variant of a platform counts."""
+    built = checksum_platforms(names, version)
+    return [p for p in required if not any(b == p or b.startswith(p + "-") for b in built)]
+
+
 # Release notes
 
 def changes(repo: str, commit: str) -> list:
@@ -229,29 +243,97 @@ def changes(repo: str, commit: str) -> list:
     return (log.splitlines() if log else ["- No changes."]) + ["", f"Changes since {previous}."]
 
 
+# Each machine that builds for a release rewrites only its own marked parts of
+# the notes, plus the shared commit line and downloads list; text outside the
+# markers (hand edits on GitHub) is kept.
+PART = re.compile(r"<!-- app-release:(?P<kind>[a-z]+)(?P<attrs>[^>]*?) -->\n.*?<!-- /app-release:(?P=kind) -->\n?",
+                  re.S)
+ANY_PLATFORM = "any"
+
+
+def _block(kind: str, lines, attrs: str = "") -> list:
+    return [f"<!-- app-release:{kind}{attrs} -->", *lines, f"<!-- /app-release:{kind} -->"]
+
+
+def downloads_block(sizes: dict) -> list:
+    """The marked downloads list for {asset name: size in bytes}, by name; the
+    checksums files are left out."""
+    lines = [f"- `{name}` ({size / 1024 ** 2:.0f} MB)" for name, size in sorted(sizes.items())
+             if not name.startswith("SHA256SUMS-")]
+    return _block("downloads", lines)
+
+
+def note_parts(text: str) -> dict:
+    """{(kind, first attribute): (start, end, attributes)} of the marked parts
+    of *text*; a platform part's first attribute is its platform."""
+    parts = {}
+    for match in PART.finditer(text):
+        words = match.group("attrs").split()
+        attrs = dict(w.split("=", 1) for w in words[1:] if "=" in w)
+        parts[(match.group("kind"), words[0] if words else "")] = (match.start(), match.end(), attrs)
+    return parts
+
+
+def platform_commits(text: str) -> dict:
+    """{platform: the commit its notes part says it was built from}."""
+    return {name: attrs.get("commit", "") for (kind, name), (_, _, attrs) in note_parts(text).items()
+            if kind == "platform"}
+
+
+def merge_notes(body: str, local: str, downloads: list) -> str:
+    """The release's notes *body* with the commit line and platform parts of
+    this run's notes *local*, and the *downloads* block, put in place of their
+    old versions; a platform part the body lacks goes after the last one."""
+    body = body.replace("\r\n", "\n")
+    if body and not body.endswith("\n"):
+        body += "\n"
+    replacements = [(key, local[start:end]) for key, (start, end, _) in note_parts(local).items()
+                    if key[0] in ("commit", "platform")]
+    replacements.append((("downloads", ""), "\n".join(downloads) + "\n"))
+    for key, part in replacements:
+        if not part.endswith("\n"):
+            part += "\n"
+        parts = note_parts(body)
+        if key in parts:
+            start, end, _ = parts[key]
+            body = body[:start] + part + body[end:]
+        elif key[0] == "platform":
+            ends = [end for (kind, _), (_, end, _) in parts.items() if kind == "platform"]
+            if ends:
+                body = body[:max(ends)] + "\n" + part + body[max(ends):]
+            else:
+                body += "\n## Platforms\n\n" + part
+        elif key[0] == "downloads":
+            body += "\n## Downloads\n\n" + part
+    return body
+
+
 def release_notes(repo, title, record, commit, artifacts, downloads, builder_lines=(),
                   features=None, notes_config=None) -> str:
-    platforms_ = sorted({a.platform for a in artifacts if a.platform})
-    lines = [f"# {title}", "",
-             f"Built for {', '.join(platforms_) or 'any platform'} from commit {commit[:10]}."]
+    notes_config = notes_config or {}
+    built_with = ""
     if record:
         toolchain = ", ".join(f"{n} {v}" for n, v in record.toolchain.items())
         dependencies = ", ".join(f"{n} {v}" for n, v in sorted(record.dependencies.items()))
         built_with = ", ".join(part for part in (toolchain, dependencies) if part)
-        if built_with:
-            lines.append(built_with + ".")
-    lines += ["", "## Changes", "", *changes(repo, commit), "", "## Downloads", ""]
-    lines += [f"- `{a.name}` ({os.path.getsize(a.path) / 1024 ** 2:.0f} MB)" for a in downloads]
-    lines += ["", "## Notes", "", f"- Packaged with app-release {__version__}.", *builder_lines]
+    feature_lines = []
     for name, spec in (features or {}).items():
         note = spec.get("note") if isinstance(spec, dict) else None
         if note and record and name in record.features:
-            lines.append(f"- {note}: {'included' if record.features[name] else 'not included'}.")
-    notes_config = notes_config or {}
-    if notes_config.get("unsigned_windows", True) and any(
-            a.kind == EXECUTABLE and (a.platform or "").startswith("windows") for a in artifacts):
-        lines.append("- The executable is unsigned: Windows SmartScreen asks for confirmation "
-                     "(More info, then Run anyway).")
+            feature_lines.append(f"- {note}: {'included' if record.features[name] else 'not included'}.")
+    lines = [f"# {title}", "", *_block("commit", [f"Built from commit {commit[:10]}."]),
+             "", "## Changes", "", *changes(repo, commit),
+             "", "## Downloads", "", *downloads_block({a.name: os.path.getsize(a.path) for a in downloads}),
+             "", "## Platforms", ""]
+    for platform in sorted({a.platform for a in artifacts if a.platform}) or [ANY_PLATFORM]:
+        part = [f"**{platform}**, built from commit {commit[:10]}" + (f" with {built_with}." if built_with else "."),
+                *feature_lines]
+        if platform.startswith("windows") and notes_config.get("unsigned_windows", True) and any(
+                a.kind == EXECUTABLE and a.platform == platform for a in artifacts):
+            part.append("- The executable is unsigned: Windows SmartScreen asks for confirmation "
+                        "(More info, then Run anyway).")
+        lines += [*_block("platform", part, f" {platform} commit={commit}"), ""]
+    lines += ["## Notes", "", f"- Packaged with app-release {__version__}.", *builder_lines]
     lines += list(notes_config.get("extra") or [])
     return "\n".join(lines) + "\n"
 

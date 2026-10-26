@@ -6,7 +6,7 @@ Run on the machine that builds, from any directory:
     app-release [REPO] [--builder NAME] [--destination NAME ...] [--toolchain T]
         [--bump major|minor|patch] [--variant cuda] [--products NAME ...] [--no-build]
         [--build-info FILE] [--retag] [--force] [--notes FILE] [--no-upload]
-        [--publish] [--yes] [--yes-irreversible] [-- <build args>]
+        [--publish] [--status] [--yes] [--yes-irreversible] [-- <build args>]
 
 REPO is the app's checkout (default: the current directory). Its
 ``release.toml``, or ``[tool.release]`` in its ``pyproject.toml``, picks the
@@ -46,14 +46,22 @@ file is as last generated, so edits to it are kept.
 Last, it tags the build's commit v<version>, pushes the current branch to
 ``--remote`` when the remote's copy of it lacks that commit, pushes the tag, and
 publishes to each destination; that each destination is ready (gh installed
-and logged in) is checked before building. Before a release that reads the notes is
-created, it shows them to approve, edit in $EDITOR (Notepad on Windows when
-unset) or abort, then asks once to run the commands; ``--yes`` skips both
-prompts. Steps that cannot be undone (publishing to a package registry,
-deleting old releases' downloads) ask again, unless ``--yes-irreversible``. Steps already done are skipped, so a
-rerun resumes; ``--retag`` moves an existing tag to the build's commit, and
-``--publish`` publishes a GitHub draft. ``--no-upload`` stops after staging and
+and logged in) is checked before building. A GitHub release that exists
+already, from another platform's run, gets this run's assets and its part of
+the notes merged into the release's (see destinations/github.py). Before
+notes are created or changed, it shows them to approve, edit in $EDITOR
+(Notepad on Windows when unset) or abort, then asks once to run the commands;
+``--yes`` skips both prompts. Steps that cannot be undone (publishing to a
+package registry, deleting old releases' downloads) ask again, unless
+``--yes-irreversible``. Steps already done are skipped, so a rerun resumes;
+``--retag`` moves an existing tag to the build's commit, and ``--publish``
+publishes a GitHub draft, once every configured ``platforms`` entry is in it
+and built from the tag's commit. ``--no-upload`` stops after staging and
 prints the commands.
+
+``--status`` only reports: the tag here and on ``--remote``, and each
+destination's release for the checkout's version (draft or not, its
+platforms, those configured but missing, the commit of each notes part).
 
 Each step is timed, and the log goes to the console and to a file in the app's
 build folder (Nuitka: build/logs/; otherwise .release/logs/).
@@ -97,6 +105,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--notes", help="release notes file to use instead of the generated one")
     parser.add_argument("--no-upload", action="store_true", help="stage the assets and print the commands only")
     parser.add_argument("--publish", action="store_true", help="publish the release instead of leaving a draft")
+    parser.add_argument("--status", action="store_true",
+                        help="report the tag and the release of the checkout's version, and change nothing")
     parser.add_argument("--remote", default="origin", help="git remote to push the tag to (default: origin)")
     parser.add_argument("--yes", action="store_true", help="approve the release notes and upload without asking first")
     parser.add_argument("--yes-irreversible", action="store_true",
@@ -125,6 +135,23 @@ def _destinations(repo, config, opts) -> list:
     if unknown:
         sys.exit(f"Configuration: destination {unknown[0]!r} is not one of {', '.join(sorted(DESTINATIONS))}.")
     return [DESTINATIONS[n](repo, config) for n in names]
+
+
+def _status(repo, tag, remote, destinations, platforms) -> None:
+    """Print where tag *tag* is and what each destination holds for it; runs
+    only git and gh commands that read."""
+    local = vcs.tagged_commit(repo, tag)
+    on_remote = vcs.remote_tagged_commit(repo, tag, remote)
+    print(f"Tag {tag}: here {'at ' + local[:10] if local else 'absent'}; on {remote} "
+          + ("unknown (cannot reach it)" if on_remote is None
+             else f"at {on_remote[:10]}" if on_remote else "absent") + ".")
+    if local and on_remote and local != on_remote:
+        print(f"  The tags differ: {remote}'s is the one that counts; fetch it (git fetch {remote} --tags --force).")
+    if platforms:
+        print(f"Configured platforms: {', '.join(platforms)}.")
+    for destination in destinations:
+        for line in destination.status_lines(tag, platforms):
+            print(line)
 
 
 def _check_up_to_date(repo, opts) -> None:
@@ -196,6 +223,10 @@ def main(argv=None) -> None:
 
     version_source = version_from_config(repo, config.get("version")) or builder.default_version_source()
     version = version_source.read()
+    platforms = configuration.platforms(config)
+    if opts.status:
+        _status(repo, f"v{version}", opts.remote, destinations, platforms)
+        return
     artifacts = builder.artifacts()
     if opts.products:
         missing = [p for p in opts.products if p not in {a.product for a in artifacts}]
@@ -263,7 +294,8 @@ def main(argv=None) -> None:
     release = ReleasePlan(repo=repo, tag=tag, commit=commit, remote=opts.remote, title=title,
                           assets=downloads + sums,
                           notes=os.path.relpath(notes, repo).replace(os.sep, "/"),
-                          publish=opts.publish, retag=opts.retag, remote_tag=remote_tag)
+                          publish=opts.publish, retag=opts.retag, remote_tag=remote_tag,
+                          platforms=platforms, force=opts.force, merge_notes=not opts.notes)
     if opts.no_upload:
         moved = " (git tag -f, and git push --force for the tag)" if opts.retag else ""
         print(f"\nTo publish, from {repo}, tag {commit[:10]} as {tag}{moved}, push the branch with "
@@ -279,7 +311,8 @@ def main(argv=None) -> None:
         return
     confirm = not opts.yes and sys.stdin.isatty()
     if confirm and not opts.notes and reads_notes:
-        pipeline.approve_notes(notes)
+        for path in dict.fromkeys(step[step.index("--notes-file") + 1] for step in steps if "--notes-file" in step):
+            pipeline.approve_notes(os.path.join(repo, path))
     print(f"\nIn {repo}:")
     for step in steps:
         print("  " + command_line(step))

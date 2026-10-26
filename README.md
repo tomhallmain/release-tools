@@ -40,7 +40,7 @@ installed.
 app-release [REPO] [--builder NAME] [--destination NAME ...] [--toolchain T]
     [--bump major|minor|patch] [--variant cuda] [--products NAME ...] [--no-build]
     [--build-info FILE] [--retag] [--force] [--notes FILE] [--no-upload]
-    [--publish] [--yes] [--yes-irreversible] [-- <build args>]
+    [--publish] [--status] [--yes] [--yes-irreversible] [-- <build args>]
 ```
 
 `REPO` is the app's checkout (default: the current directory). The steps and
@@ -54,9 +54,12 @@ new build. To publish what is already built:
 
 - `--no-build` packages a build from an ancestor of HEAD whose files differ,
   with a warning; the tag goes on the build's commit.
-- `--retag` moves tag `v<version>` to the build's commit. An existing GitHub
-  release keeps its notes, and same-named assets are replaced. Use it only
-  for a release nobody has downloaded: clones that fetched the old tag keep it.
+- `--retag` moves tag `v<version>` to the build's commit. Same-named assets
+  of an existing GitHub release are replaced, and this platform's part of its
+  notes is rewritten. Use it only for a release nobody has downloaded: clones
+  that fetched the old tag keep it. It refuses while the release holds other
+  platforms' builds, which would be left built from the old commit, unless
+  `--force`.
 - `--build-info FILE` puts back the build record the artifacts were built
   with, after a later build run rewrote it. For a Nuitka app, take it from
   the executable's unpack folder, e.g.
@@ -67,6 +70,63 @@ Together: `--no-build --build-info <file> --retag --publish`.
 
 Builder options: `--memory-wait-plugin` (nuitka: print the plugin's path and
 exit), `--target TRIPLE` (cargo, repeatable).
+
+### Releasing from several platforms
+
+A builder such as Nuitka builds only for the OS it runs on, so a release with
+Windows, macOS and Linux downloads is built on a machine of each. Every
+machine adds its build to one GitHub draft release for `v<version>`, built
+from the same commit, and the last one publishes it.
+
+Name the platforms a release must have in the configuration:
+
+```toml
+platforms = ["windows-x64", "macos-arm64", "linux-x64"]
+```
+
+Then:
+
+1. On one machine: `app-release --bump minor --no-upload`. This commits the
+   new version and builds and stages it without tagging or uploading. Push
+   the bump commit.
+2. On every other platform: `git pull`, then `app-release --no-upload` as a
+   trial build. Fix anything platform-specific now, before the version is
+   tagged anywhere: commit, push, and repeat the trial on the platforms
+   already done, until all build from the same commit.
+3. On each platform, in any order: `app-release`. The first run tags the
+   commit and creates the draft; each later run adds its downloads and its
+   part of the release notes.
+4. On any machine: `app-release --status`, then `app-release --publish`.
+
+What keeps the release consistent:
+
+- The tag on the remote is the reference. A run stops when the remote's tag
+  is on another commit than its build, and copies the remote's tag when it
+  has none locally.
+- A run stops before building when the checkout is behind its upstream
+  ("pull first"), and `--bump` refuses while the current version is still a
+  draft.
+- Each run rewrites only its own platform's part of the notes, the commit
+  line and the downloads list, between `<!-- app-release:... -->` markers.
+  Edits made on GitHub outside the markers are kept. Notes with no markers
+  (written by hand or given with `--notes`) are left alone.
+- `--publish` refuses while a configured platform has no build in the
+  release, or the notes say a platform was built from a commit other than
+  the tag's. `--force` publishes anyway, with a warning.
+- `--status` reports the tag here and on the remote, whether the release is a
+  draft, which platforms it has and lacks, and the commit of each notes part.
+  It changes nothing and needs no `gh` login.
+
+Each machine needs:
+
+- `gh`, installed and logged in (`gh auth login`); checked before building.
+- The app's build prerequisites: for Nuitka, a C compiler (on macOS, the Xcode
+  Command Line Tools); commands the build needs can be listed in the builder's
+  table, e.g. `[nuitka] requires = ["vlc"]`, and are checked before building.
+- On macOS, a build is for the machine's architecture only: Apple silicon gives
+  `macos-arm64`; `macos-x64` needs an Intel Mac.
+- On Linux, a build runs only where glibc is at least the build machine's, so
+  build on an older LTS distribution.
 
 ## Configuration
 

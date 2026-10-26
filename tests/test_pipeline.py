@@ -405,6 +405,17 @@ def test_two_artifacts_under_one_name_are_refused(tmp_path):
                         Artifact("tool", str(second), EXECUTABLE, "linux-x64")], [])
 
 
+# platforms in a release
+
+def test_checksum_files_name_the_platforms_built():
+    names = ["App-1.0.0-windows-x64.exe", "SHA256SUMS-1.0.0-windows-x64.txt",
+             "SHA256SUMS-1.0.0-linux-x64-cuda.txt", "SHA256SUMS-0.9.0-macos-arm64.txt"]
+    assert pipeline.checksum_platforms(names, "1.0.0") == {"windows-x64", "linux-x64-cuda"}
+    assert pipeline.missing_platforms(names, "1.0.0", ["windows-x64", "linux-x64", "macos-arm64"]) == [
+        "macos-arm64"]
+    assert pipeline.missing_platforms(names, "1.0.0", []) == []
+
+
 # release notes
 
 def _notes(tmp_path, monkeypatch, record=None, artifacts=None, **kwargs):

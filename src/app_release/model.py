@@ -83,6 +83,13 @@ class ReleasePlan:
     publish: bool = False
     retag: bool = False
     remote_tag: Optional[str] = None   # the tag's commit on the remote, "" when absent; None when not looked up
+    platforms: list = field(default_factory=list)   # what publishing requires, from the configuration
+    force: bool = False
+    merge_notes: bool = True   # False with --notes FILE: an existing release's notes are left alone
+
+    @property
+    def version(self) -> str:
+        return self.tag[1:]
 
     def files(self, assets=None) -> list:
         """Repo-relative, slash-separated paths of *assets* (default: all)."""
