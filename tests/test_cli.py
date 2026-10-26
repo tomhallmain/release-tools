@@ -56,10 +56,8 @@ def test_python_is_an_alias_of_toolchain():
     assert _opts("--python", "/usr/bin/python3.11").toolchain == "/usr/bin/python3.11"
 
 
-def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
-    """VERSION, build_exe.py, a build record from HEAD and an executable after it:
-    a --no-build --no-upload run stages the assets under today's names."""
-    monkeypatch.setattr(vcs, "git", checkout_git())
+def _nuitka_app(tmp_path):
+    """VERSION, build_exe.py, a build record from HEAD and an executable after it."""
     (tmp_path / "build_exe.py").write_text("", encoding="utf-8")
     (tmp_path / "VERSION").write_text("1.0.0\n", encoding="utf-8")
     record_dir = tmp_path / "build" / "nuitka"
@@ -72,12 +70,26 @@ def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
     os.chmod(exe, 0o755)
     later = os.path.getmtime(record) + 10
     os.utime(exe, (later, later))
+
+
+def _main(*argv):
     try:
-        cli.main([str(tmp_path), "--no-build", "--no-upload"])
+        cli.main(list(argv))
     finally:
         for handler in list(cli.logger.handlers):
             cli.logger.removeHandler(handler)
             handler.close()
+
+
+def _no_build(*args, **kwargs):
+    raise AssertionError("built")
+
+
+def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
+    """A --no-build --no-upload run stages the assets under today's names."""
+    monkeypatch.setattr(vcs, "git", checkout_git())
+    _nuitka_app(tmp_path)
+    _main(str(tmp_path), "--no-build", "--no-upload")
     from app_release import platforms
     stage = tmp_path / "dist" / "release" / "v1.0.0"
     suffix = f"1.0.0-{platforms.host()}"
@@ -89,6 +101,26 @@ def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
     assert "OQS (post-quantum) encryption: included." in notes
     assert "gh release create v1.0.0" in capsys.readouterr().out
     assert (tmp_path / "build" / "logs").is_dir()
+
+
+def test_an_unreachable_remote_stops_an_upload_before_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git())
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    _nuitka_app(tmp_path)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path), "--destination", "none")
+    assert "Cannot reach the git remote origin" in str(exited.value.code)
+
+
+def test_a_missing_gh_stops_an_upload_before_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git())
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    from app_release.destinations import github
+    monkeypatch.setattr(github.shutil, "which", lambda name: None)
+    _nuitka_app(tmp_path)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path))
+    assert "gh (GitHub CLI) is not installed" in str(exited.value.code)
 
 
 def test_the_old_command_name_fails_naming_app_release():

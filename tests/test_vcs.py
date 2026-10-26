@@ -8,7 +8,7 @@ from helpers import HEAD, REMOTE_HEAD
 
 def _remote_git(remote_has_commit, branch="master", reachable=True, local_tag=None, remote_tag=""):
     def git(repo, *args):
-        if args[:2] == ("ls-remote", "--tags"):
+        if args[0] == "ls-remote" and args[2].startswith("refs/tags/"):
             return remote_tag if reachable else None
         if args[:3] == ("rev-parse", "-q", "--verify"):
             return local_tag
@@ -56,6 +56,38 @@ def test_done_steps_are_left_out(tmp_path, monkeypatch):
     monkeypatch.setattr(vcs, "git", _remote_git(remote_has_commit=True, local_tag=HEAD,
                                                 remote_tag=f"{HEAD}\trefs/tags/v1.0.0"))
     assert vcs.tag_steps(str(tmp_path), "v1.0.0", HEAD, "origin") == []
+
+
+def test_the_remote_tag_resolves_an_annotated_tag_to_its_commit(tmp_path, monkeypatch):
+    tag_object = "o" * 40
+    listed = f"{tag_object}\trefs/tags/v1.0.0\n{HEAD}\trefs/tags/v1.0.0^{{}}"
+    monkeypatch.setattr(vcs, "git", _remote_git(remote_has_commit=True, remote_tag=listed))
+    assert vcs.remote_tagged_commit(str(tmp_path), "v1.0.0", "origin") == HEAD
+
+
+def test_the_remote_tag_is_empty_when_absent_and_none_when_unreachable(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", _remote_git(remote_has_commit=True))
+    assert vcs.remote_tagged_commit(str(tmp_path), "v1.0.0", "origin") == ""
+    monkeypatch.setattr(vcs, "git", _remote_git(remote_has_commit=True, reachable=False))
+    assert vcs.remote_tagged_commit(str(tmp_path), "v1.0.0", "origin") is None
+
+
+def test_a_remote_tag_on_the_build_is_copied_here_without_a_push(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", _remote_git(remote_has_commit=True))
+    assert vcs.tag_steps(str(tmp_path), "v1.0.0", HEAD, "origin", on_remote=HEAD) == [
+        ["git", "tag", "v1.0.0", HEAD]]
+
+
+def test_a_stale_local_tag_is_moved_to_match_the_remote(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", _remote_git(remote_has_commit=True, local_tag="c" * 40))
+    assert vcs.tag_steps(str(tmp_path), "v1.0.0", HEAD, "origin", on_remote=HEAD) == [
+        ["git", "tag", "-f", "v1.0.0", HEAD]]
+
+
+def test_retag_does_not_force_push_an_annotated_tag_already_on_the_build(tmp_path, monkeypatch):
+    listed = f"{'o' * 40}\trefs/tags/v1.0.0\n{HEAD}\trefs/tags/v1.0.0^{{}}"
+    monkeypatch.setattr(vcs, "git", _remote_git(remote_has_commit=True, local_tag=HEAD, remote_tag=listed))
+    assert vcs.tag_steps(str(tmp_path), "v1.0.0", HEAD, "origin", retag=True) == []
 
 
 def test_changes_fingerprint(tmp_path, monkeypatch):

@@ -29,6 +29,20 @@ def tagged_commit(repo: str, tag: str):
     return git(repo, "rev-parse", "-q", "--verify", f"refs/tags/{tag}^{{commit}}")
 
 
+def remote_tagged_commit(repo: str, tag: str, remote: str):
+    """The commit tag *tag* points at on *remote*, "" when the remote has no
+    such tag, or None when the remote cannot be reached."""
+    listed = git(repo, "ls-remote", remote, f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}")
+    if listed is None:
+        return None
+    refs = {}
+    for line in listed.splitlines():
+        sha, _, name = line.partition("\t")
+        refs[name] = sha
+    # An annotated tag is listed twice; only its peeled ^{} line names the commit.
+    return refs.get(f"refs/tags/{tag}^{{}}") or refs.get(f"refs/tags/{tag}") or ""
+
+
 def dirty(repo: str):
     """Whether tracked files have uncommitted changes; None when git cannot tell."""
     status = git(repo, "status", "--porcelain", "--untracked-files=no")
@@ -47,17 +61,20 @@ def changes_fingerprint(repo: str):
     return hashlib.sha1(diff.encode("utf-8")).hexdigest() if diff is not None else None
 
 
-def tag_steps(repo: str, tag: str, commit: str, remote: str, retag: bool = False) -> list:
+def tag_steps(repo: str, tag: str, commit: str, remote: str, retag: bool = False,
+              on_remote=None) -> list:
     """The git commands that tag *commit* and push it and its branch, leaving
-    out what is done already, so that a rerun resumes."""
-    on_remote = git(repo, "ls-remote", "--tags", remote, f"refs/tags/{tag}")
+    out what is done already, so that a rerun resumes. *on_remote* is the
+    tag's commit on *remote* when already looked up."""
+    if on_remote is None:
+        on_remote = remote_tagged_commit(repo, tag, remote)
     if on_remote is None:
         sys.exit(f"Cannot reach the git remote {remote}.")
     steps = []
-    local = git(repo, "rev-parse", "-q", "--verify", f"refs/tags/{tag}^{{commit}}")
+    local = tagged_commit(repo, tag)
     if not local:
         steps.append(["git", "tag", tag, commit])
-    elif retag and local != commit:
+    elif local != commit and (retag or on_remote == commit):
         steps.append(["git", "tag", "-f", tag, commit])
     # A pushed tag carries its commits, but the branch on the remote stays where it was.
     branch = git(repo, "symbolic-ref", "--short", "-q", "HEAD")
@@ -70,6 +87,6 @@ def tag_steps(repo: str, tag: str, commit: str, remote: str, retag: bool = False
             steps.append(["git", "push", remote, f"refs/heads/{branch}"])
     if not on_remote:
         steps.append(["git", "push", remote, f"refs/tags/{tag}"])
-    elif retag and on_remote.split("\t")[0] != commit:
+    elif retag and on_remote != commit:
         steps.append(["git", "push", "--force", remote, f"refs/tags/{tag}"])
     return steps

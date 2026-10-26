@@ -27,7 +27,10 @@ artifacts were built with.
 
 Then it checks the build against the checkout (version, commit or same files,
 no uncommitted changes, artifacts not older than the build, an existing tag on
-the build's commit, asset sizes); ``--force`` packages despite failed checks.
+the build's commit, both here and on ``--remote``, asset sizes); ``--force``
+packages despite failed checks. Another machine's tag on the remote is what
+counts: a local tag missing or moved is made to match it when it is on the
+build's commit. The remote must be reachable, except with ``--no-upload``.
 It stages each artifact as ``<Product>-<version>[-<os>-<arch>][-<variant>]<ext>``
 with the lock files, a SHA256SUMS file per platform and release notes, unless
 ``--notes`` names a file to use. A rerun regenerates the notes only while the
@@ -35,7 +38,8 @@ file is as last generated, so edits to it are kept.
 
 Last, it tags the build's commit v<version>, pushes the current branch to
 ``--remote`` when the remote's copy of it lacks that commit, pushes the tag, and
-publishes to each destination. Before a release that reads the notes is
+publishes to each destination; that each destination is ready (gh installed
+and logged in) is checked before building. Before a release that reads the notes is
 created, it shows them to approve, edit in $EDITOR (Notepad on Windows when
 unset) or abort, then asks once to run the commands; ``--yes`` skips both
 prompts. Steps that cannot be undone (publishing to a package registry,
@@ -158,10 +162,19 @@ def main(argv=None) -> None:
         sys.exit(f"No artifacts found for builder {builder.name}; build first.")
     if opts.notes and not os.path.isfile(opts.notes):
         sys.exit(f"--notes: {opts.notes} not found.")
+    if not opts.no_upload:
+        # Also checked before publishing; this saves a long build that could not be uploaded.
+        for destination in destinations:
+            destination.check_ready()
 
     if opts.bump:
         version = bump(repo, version_source, version, opts.bump, opts.no_build)
     tag = f"v{version}"
+    remote_tag = vcs.remote_tagged_commit(repo, tag, opts.remote)
+    if remote_tag is None:
+        if not opts.no_upload:
+            sys.exit(f"Cannot reach the git remote {opts.remote} to check tag {tag} there.")
+        logger.warning(f"Cannot reach the git remote {opts.remote}: not checking tag {tag} there.")
 
     app_name = configuration.app_name(config, [a.product for a in artifacts])
     builder.app_config = {**config, "app_name": app_name}
@@ -175,7 +188,8 @@ def main(argv=None) -> None:
     record = builder.read_record()
     limits = [d.max_asset_bytes for d in destinations if d.max_asset_bytes]
     errors, warnings = pipeline.check(repo, version, tag, record, artifacts, opts.variant, variant_hints,
-                                      min(limits) if limits else None, opts.retag, opts.no_build)
+                                      min(limits) if limits else None, opts.retag, opts.no_build,
+                                      remote_tag, opts.remote)
     for message in warnings:
         logger.warning(message)
     for message in errors:
@@ -202,7 +216,7 @@ def main(argv=None) -> None:
     release = ReleasePlan(repo=repo, tag=tag, commit=commit, remote=opts.remote, title=title,
                           assets=downloads + sums,
                           notes=os.path.relpath(notes, repo).replace(os.sep, "/"),
-                          publish=opts.publish, retag=opts.retag)
+                          publish=opts.publish, retag=opts.retag, remote_tag=remote_tag)
     if opts.no_upload:
         moved = " (git tag -f, and git push --force for the tag)" if opts.retag else ""
         print(f"\nTo publish, from {repo}, tag {commit[:10]} as {tag}{moved}, push the branch with "

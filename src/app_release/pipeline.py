@@ -86,8 +86,9 @@ def rebuild_stale(repo, version, artifacts, builder, record, build_args, feature
 # Checks
 
 def check(repo, version, tag, record, artifacts, variant, variant_hints, max_asset_bytes,
-          retag=False, no_build=False):
-    """(errors, warnings) found before packaging."""
+          retag=False, no_build=False, remote_tag=None, remote="origin"):
+    """(errors, warnings) found before packaging. *remote_tag* is the commit
+    tag *tag* points at on *remote*: "" when it has no such tag, None when unknown."""
     errors, warnings = [], []
     if not re.fullmatch(VERSION_PATTERN, version):
         errors.append(f"Version {version!r} is not up to four dot-separated numbers.")
@@ -129,8 +130,20 @@ def check(repo, version, tag, record, artifacts, variant, variant_hints, max_ass
                               "or leave it out with --products.")
     tagged = vcs.tagged_commit(repo, tag)
     expected = built or head
-    if tagged and expected and tagged != expected:
+    remote_differs = bool(remote_tag and expected and remote_tag != expected)
+    if remote_differs:
+        # Another machine may have tagged and uploaded a build of that commit already.
         if retag:
+            warnings.append(f"Tag {tag} on {remote} points at {remote_tag[:10]}; "
+                            f"--retag moves it to {expected[:10]}.")
+        else:
+            errors.append(f"Tag {tag} on {remote} points at {remote_tag[:10]}, not the build's commit "
+                          f"{expected[:10]}; --retag moves it.")
+    if tagged and expected and tagged != expected and not (remote_differs and tagged == remote_tag):
+        if remote_tag == expected:
+            warnings.append(f"Tag {tag} here points at {tagged[:10]}, but on {remote} at the build's "
+                            "commit; the release moves it here to match.")
+        elif retag:
             warnings.append(f"Tag {tag} points at {tagged[:10]}; --retag moves it to {expected[:10]}.")
         else:
             errors.append(f"Tag {tag} points at {tagged[:10]}, not the build's commit {expected[:10]}; "
@@ -298,7 +311,8 @@ def publish_steps(release, destinations) -> tuple:
     planned, so a missing login cannot stop the run after the tag is pushed."""
     for destination in destinations:
         destination.check_ready()
-    steps = vcs.tag_steps(release.repo, release.tag, release.commit, release.remote, release.retag)
+    steps = vcs.tag_steps(release.repo, release.tag, release.commit, release.remote, release.retag,
+                          release.remote_tag)
     reads_notes = False
     irreversible = []
     for destination in destinations:

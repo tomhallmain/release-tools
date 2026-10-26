@@ -82,6 +82,7 @@ class ReleasePlan:
     notes: str               # path, relative to the repo
     publish: bool = False
     retag: bool = False
+    remote_tag: Optional[str] = None   # the tag's commit on the remote, "" when absent; None when not looked up
 
     def files(self, assets=None) -> list:
         """Repo-relative, slash-separated paths of *assets* (default: all)."""

@@ -191,6 +191,49 @@ def test_retag_turns_the_tag_error_into_a_warning(tmp_path, monkeypatch):
     assert errors == [] and any("--retag" in w for w in warnings)
 
 
+def test_check_refuses_a_remote_tag_on_another_commit_without_a_local_tag(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", fake_git())
+    record, artifact = built(tmp_path, commit=HEAD)
+    errors, _ = _check(tmp_path, record, artifact, remote_tag="c" * 40)
+    assert len(errors) == 1
+    assert "on origin" in errors[0] and "c" * 10 in errors[0] and HEAD[:10] in errors[0]
+
+
+def test_check_refuses_a_remote_tag_on_another_commit_despite_the_local_tag(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", fake_git(tag=HEAD))
+    record, artifact = built(tmp_path, commit=HEAD)
+    errors, _ = _check(tmp_path, record, artifact, remote_tag="c" * 40)
+    assert len(errors) == 1 and "on origin" in errors[0]
+
+
+def test_both_tags_on_the_same_other_commit_give_one_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", fake_git(tag="c" * 40))
+    record, artifact = built(tmp_path, commit=HEAD)
+    errors, _ = _check(tmp_path, record, artifact, remote_tag="c" * 40)
+    assert len(errors) == 1
+
+
+def test_check_accepts_a_remote_tag_on_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", fake_git())
+    record, artifact = built(tmp_path, commit=HEAD)
+    errors, _ = _check(tmp_path, record, artifact, remote_tag=HEAD)
+    assert errors == []
+
+
+def test_a_stale_local_tag_only_warns_when_the_remote_tag_is_on_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", fake_git(tag="c" * 40))
+    record, artifact = built(tmp_path, commit=HEAD)
+    errors, warnings = _check(tmp_path, record, artifact, remote_tag=HEAD)
+    assert errors == [] and any("to match" in w for w in warnings)
+
+
+def test_retag_turns_the_remote_tag_error_into_a_warning(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", fake_git())
+    record, artifact = built(tmp_path, commit=HEAD)
+    errors, warnings = _check(tmp_path, record, artifact, retag=True, remote_tag="c" * 40)
+    assert errors == [] and any("on origin" in w and "--retag" in w for w in warnings)
+
+
 def test_check_warns_about_an_embedded_checkout_path(tmp_path, monkeypatch):
     monkeypatch.setattr(vcs, "git", fake_git())
     record, artifact = built(tmp_path, commit=HEAD)
