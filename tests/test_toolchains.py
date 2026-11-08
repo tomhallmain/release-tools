@@ -6,6 +6,7 @@ import os
 import pytest
 
 from app_release.builders import toolchains
+from app_release.lib.translations import _
 from app_release.model import BuildRecord
 
 
@@ -85,7 +86,8 @@ def test_pin_comes_before_the_last_build(probes, tmp_path):
 
 def test_last_build_version_is_the_fallback(probes, tmp_path):
     path, reason = toolchains.build_python(str(tmp_path), None, _record("3.10.4"))
-    assert path == "/found/python3.10" and "last build" in reason
+    assert path == "/found/python3.10"
+    assert reason == _("Python {0}, from {1}").format("3.10.1", _("the last build"))
 
 
 def test_nothing_to_go_by_is_refused(probes, tmp_path):

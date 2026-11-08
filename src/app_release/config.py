@@ -24,6 +24,8 @@ import os
 import sys
 import tomllib
 
+from app_release.lib.translations import _
+
 RELEASE_TOML = "release.toml"
 PYPROJECT = "pyproject.toml"
 KNOWN_KEYS = {"builder", "destinations", "version", "app_name", "secondary_suffixes",
@@ -35,7 +37,7 @@ def _read_toml(path: str) -> dict:
         with open(path, "rb") as f:
             return tomllib.load(f)
     except (OSError, tomllib.TOMLDecodeError) as e:
-        sys.exit(f"Cannot read {path}: {e}")
+        sys.exit(_("Cannot read {0}: {1}").format(path, e))
 
 
 def load(repo: str):
@@ -47,8 +49,8 @@ def load(repo: str):
         in_pyproject = _read_toml(pyproject).get("tool", {}).get("release")
     if os.path.isfile(release_toml):
         if in_pyproject is not None:
-            sys.exit(f"Both {RELEASE_TOML} and [tool.release] in {PYPROJECT} configure the release; "
-                     "keep one.")
+            sys.exit(_("Both {0} and [tool.release] in {1} configure the release; keep one.").format(
+                RELEASE_TOML, PYPROJECT))
         return _read_toml(release_toml), release_toml
     if in_pyproject is not None:
         return in_pyproject, pyproject

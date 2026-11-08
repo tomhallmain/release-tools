@@ -1,6 +1,7 @@
 """No host: the release is staged, tagged and pushed, and published by hand or
 by CI started by the tag."""
 from app_release.destinations.base import Destination
+from app_release.lib.translations import _
 
 
 class NoDestination(Destination):
@@ -10,4 +11,4 @@ class NoDestination(Destination):
         return []
 
     def dry_run_lines(self, release) -> list:
-        return ["none: nothing to publish beyond the tag."]
+        return [_("{0}: nothing to publish beyond the tag.").format(self.name)]

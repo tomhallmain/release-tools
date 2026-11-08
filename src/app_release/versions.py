@@ -17,6 +17,7 @@ import tomllib
 from abc import ABC, abstractmethod
 
 from app_release import vcs
+from app_release.lib.translations import _
 from app_release.log import logger
 
 VERSION_PATTERN = r"\d+(\.\d+){0,3}"
@@ -48,7 +49,7 @@ class VersionSource(ABC):
     def write(self, version: str) -> None: ...
 
     def _missing(self) -> None:
-        sys.exit(f"No version found: {self.path()} does not exist.")
+        sys.exit(_("No version found: {0} does not exist.").format(self.path()))
 
 
 class FileVersion(VersionSource):
@@ -71,12 +72,12 @@ class PatternVersion(VersionSource):
         super().__init__(repo, file)
         self.regex = re.compile(regex, re.M)
         if self.regex.groups != 1:
-            sys.exit(f"Version pattern {regex!r} must have exactly one group, the version.")
+            sys.exit(_("Version pattern {0!r} must have exactly one group, the version.").format(regex))
 
     def _match(self, text: str):
         match = self.regex.search(text)
         if not match:
-            sys.exit(f"No version found in {self.path()} by {self.regex.pattern!r}.")
+            sys.exit(_("No version found in {0} by {1!r}.").format(self.path(), self.regex.pattern))
         return match
 
     def read(self) -> str:
@@ -130,10 +131,10 @@ class TomlVersion(VersionSource):
         value = data
         for part in key.split("."):
             if not isinstance(value, dict) or part not in value:
-                sys.exit(f"No version found: {self.path()} has no {key}.")
+                sys.exit(_("No version found: {0} has no {1}.").format(self.path(), key))
             value = value[part]
         if not isinstance(value, str):
-            sys.exit(f"{self.path()}: {key} is not a string.")
+            sys.exit(_("{0}: {1} is not a string.").format(self.path(), key))
         return value
 
     def read(self) -> str:
@@ -149,7 +150,7 @@ class TomlVersion(VersionSource):
         *table, leaf = key.split(".")
         span = _toml_line_pattern(tuple(table), leaf, text)
         if span is None:
-            sys.exit(f"Cannot find the line of {key} in {self.path()} to change; set the version yourself.")
+            sys.exit(_("Cannot find the line of {0} in {1} to change; set the version yourself.").format(key, self.path()))
         _write_text(self.path(), text[:span[0]] + version + text[span[1]:])
 
 
@@ -159,7 +160,7 @@ class JsonVersion(VersionSource):
     def __init__(self, repo: str, file: str, key: str = "version"):
         super().__init__(repo, file)
         if "." in key:
-            sys.exit(f"JSON version key {key!r}: only a top-level key is supported.")
+            sys.exit(_("JSON version key {0!r}: only a top-level key is supported.").format(key))
         self.key = key
 
     def read(self) -> str:
@@ -167,7 +168,7 @@ class JsonVersion(VersionSource):
             self._missing()
         value = json.loads(_read_text(self.path())).get(self.key)
         if not isinstance(value, str):
-            sys.exit(f"No version found: {self.path()} has no string {self.key!r}.")
+            sys.exit(_("No version found: {0} has no string {1!r}.").format(self.path(), self.key))
         return value
 
     def write(self, version: str) -> None:
@@ -190,8 +191,8 @@ def from_config(repo: str, spec):
             return TomlVersion(repo, value["file"], value["key"])
         if kind == "json" and isinstance(value, dict):
             return JsonVersion(repo, value["file"], value.get("key", "version"))
-    sys.exit(f"Configuration: cannot read version = {spec!r}; give a file, or one of "
-             "pattern, toml or json (see the README).")
+    sys.exit(_("Configuration: cannot read version = {0!r}; give a file, or one of pattern, toml or json "
+               "(see the README).").format(spec))
 
 
 def bumped(version: str, part: str) -> str:
@@ -208,23 +209,24 @@ def bump(repo: str, source: VersionSource, version: str, part: str, no_build: bo
     """Commit *version* bumped by *part* to *source* and return the new version,
     or *version* while tag v<version> does not exist."""
     if not re.fullmatch(VERSION_PATTERN, version):
-        sys.exit(f"Version {version!r} is not up to four dot-separated numbers; cannot bump it.")
+        sys.exit(_("Version {0!r} is not up to four dot-separated numbers; cannot bump it.").format(version))
     if not vcs.git(repo, "rev-parse", "HEAD"):
-        sys.exit("git cannot tell which commit the checkout is at; cannot bump the version.")
+        sys.exit(_("git cannot tell which commit the checkout is at; cannot bump the version."))
     if not vcs.git(repo, "rev-parse", "-q", "--verify", f"refs/tags/v{version}"):
-        logger.info(f"Tag v{version} does not exist yet; keeping version {version}.")
+        logger.info(_("Tag {0} does not exist yet; keeping version {1}.").format(f"v{version}", version))
         return version
     new = bumped(version, part)
     if no_build:
-        sys.exit(f"--bump to {new} needs a rebuild, since the build embeds the version; "
-                 "leave out --no-build.")
+        sys.exit(_("--bump to {0} needs a rebuild, since the build embeds the version; leave out "
+                   "--no-build.").format(new))
     if vcs.dirty(repo) is not False:
-        sys.exit("Tracked files have uncommitted changes; commit or stash them before --bump.")
+        sys.exit(_("Tracked files have uncommitted changes; commit or stash them before --bump."))
     if vcs.git(repo, "rev-parse", "-q", "--verify", f"refs/tags/v{new}"):
-        sys.exit(f"Tag v{new} exists already; set the version yourself.")
+        sys.exit(_("Tag {0} exists already; set the version yourself.").format(f"v{new}"))
     source.write(new)
     if vcs.git(repo, "commit", "-m", f"Version {new}", "--", source.path()) is None:
         source.write(version)
-        sys.exit(f"git commit of {source.path()} failed; the version stays {version}.")
-    logger.info(f"Version {version} -> {new}, committed as {vcs.git(repo, 'rev-parse', '--short=10', 'HEAD')}.")
+        sys.exit(_("git commit of {0} failed; the version stays {1}.").format(source.path(), version))
+    logger.info(_("Version {0} -> {1}, committed as {2}.").format(
+        version, new, vcs.git(repo, "rev-parse", "--short=10", "HEAD")))
     return new

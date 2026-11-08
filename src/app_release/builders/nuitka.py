@@ -13,6 +13,7 @@ import sys
 from app_release import platforms
 from app_release.builders.base import Builder, APP
 from app_release.builders.toolchains import build_python
+from app_release.lib.translations import _
 from app_release.log import logger
 from app_release.model import EXECUTABLE, Artifact, BuildRun
 from app_release.versions import FileVersion, PatternVersion
@@ -27,6 +28,7 @@ class NuitkaBuilder(Builder):
     name = "nuitka"
     record_owner = APP
     default_features = {
+        # The note is a release notes line, so it stays in English.
         "oqs": {"rebuild_option": "--with-oqs", "note": "OQS (post-quantum) encryption"},
     }
     default_variant_hints = {
@@ -36,8 +38,8 @@ class NuitkaBuilder(Builder):
     @classmethod
     def add_options(cls, parser) -> None:
         parser.add_argument("--memory-wait-plugin", action="store_true",
-                            help="print the path of the Nuitka memory-wait plugin and exit "
-                                 "(for a build_exe.py run directly)")
+                            help=_("print the path of the Nuitka memory-wait plugin and exit "
+                                   "(for a build_exe.py run directly)"))
 
     @classmethod
     def early_action(cls, opts) -> bool:
@@ -63,7 +65,7 @@ class NuitkaBuilder(Builder):
         return os.path.isfile(self._script())
 
     def describe(self) -> str:
-        return f"{BUILD_SCRIPT} at its root"
+        return _("{0} at its root").format(BUILD_SCRIPT)
 
     def artifacts(self) -> list:
         dist = os.path.join(self.repo, "dist")
@@ -104,6 +106,7 @@ class NuitkaBuilder(Builder):
         return [(lock, "requirements.lock.txt")] if os.path.isfile(lock) else []
 
     def note_lines(self, record) -> list:
+        # In English whatever the locale: release notes are published with the release.
         return ["- At its first start the executable unpacks its runtime into the app's data folder; "
                 "later starts of the same build reuse it."]
 
@@ -115,8 +118,8 @@ class NuitkaBuilder(Builder):
         secondary = [p for p in products if p != app_name]
         for product in secondary:
             if product != f"{app_name}Headless":
-                sys.exit(f"Cannot tell how {BUILD_SCRIPT} builds {product}; build it yourself, "
-                         "or leave it out with --products.")
+                sys.exit(_("Cannot tell how {0} builds {1}; build it yourself, or leave it out with "
+                           "--products.").format(BUILD_SCRIPT, product))
         target_args = [[]] if app_name in products else []
         if secondary:
             if '"--with-headless"' in source:
@@ -125,10 +128,10 @@ class NuitkaBuilder(Builder):
             elif '"--headless"' in source:
                 target_args.append(["--headless"])
             else:
-                sys.exit(f"{BUILD_SCRIPT} has no option that builds {secondary[0]}; build it yourself, "
-                         "or leave it out with --products.")
+                sys.exit(_("{0} has no option that builds {1}; build it yourself, or leave it out with "
+                           "--products.").format(BUILD_SCRIPT, secondary[0]))
         python, reason = build_python(self.repo, getattr(self.options, "toolchain", None), record)
-        logger.info(f"Building with {python} ({reason}).")
+        logger.info(_("Building with {0} ({1}).").format(python, reason))
         env = dict(os.environ, **{MEMORY_WAIT_ENV: MEMORY_WAIT_PLUGIN})
         return [BuildRun(command=[python, self._script(), *args], cwd=self.repo, env=env,
                          platform=platforms.host())

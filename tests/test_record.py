@@ -6,8 +6,9 @@ import sys
 
 import pytest
 
-from app_release import record as records, vcs
+from app_release import __version__, record as records, vcs
 from app_release.builders.base import Builder
+from app_release.lib.translations import _
 from app_release.model import BuildRun
 from helpers import HEAD, TREE, fake_git, write_record
 
@@ -44,12 +45,14 @@ def test_a_newer_schema_is_refused(tmp_path):
     path.write_text(json.dumps({"schema": records.SCHEMA + 1}), encoding="utf-8")
     with pytest.raises(SystemExit) as excinfo:
         records.load(str(path))
-    assert "Update app-release" in str(excinfo.value)
+    assert str(excinfo.value) == _("{0} has build record schema {1!r}; app-release {2} reads up to {3}. "
+                                   "Update app-release.").format(str(path), records.SCHEMA + 1, __version__,
+                                                                 records.SCHEMA)
 
 
 def test_restore_dates_the_record_before_the_artifacts(tmp_path):
     from helpers import built
-    _, artifact = built(tmp_path)
+    _record, artifact = built(tmp_path)
     (tmp_path / "unpacked").mkdir()
     source = write_record(tmp_path / "unpacked", commit=HEAD)
     target = tmp_path / "restored" / "build_info.json"

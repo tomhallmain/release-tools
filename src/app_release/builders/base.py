@@ -7,6 +7,7 @@ import time
 from abc import ABC, abstractmethod
 
 from app_release import record as records
+from app_release.lib.translations import _
 from app_release.log import command_line, run_logged, timed
 
 APP = "app"     # the build writes its own record
@@ -59,7 +60,7 @@ class Builder(ABC):
 
     def describe(self) -> str:
         """What detect() looks for, for the message when it finds nothing."""
-        return f"{self.name} project files"
+        return _("{0} project files").format(self.name)
 
     @abstractmethod
     def artifacts(self) -> list:
@@ -105,9 +106,9 @@ class Builder(ABC):
         started = time.time()
         for run in runs:
             command = [*run.command, *extra_args]
-            with timed(f"Building: {command_line(command)}"):
+            with timed(_("Building: {0}").format(command_line(command))):
                 if run_logged(command, cwd=run.cwd, env=run.env) != 0:
-                    sys.exit("The build failed; nothing packaged.")
+                    sys.exit(_("The build failed; nothing packaged."))
         if self.record_owner == TOOL:
             records.write(self.record_path(), version, source, started, self.toolchain_versions(),
                           self.dependency_versions(), features, list(extra_args))

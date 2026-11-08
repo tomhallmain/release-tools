@@ -20,6 +20,8 @@ import sys
 import time
 from datetime import datetime, timedelta
 
+from app_release.lib.translations import _
+
 logger = logging.getLogger("app_release")
 
 LOG_DIR_ENV = "APP_RELEASE_LOG_DIR"
@@ -139,7 +141,7 @@ def setup(app: str) -> str:
     logger.setLevel(logging.INFO)
     if KEEP_DAYS is not None:
         for path in cleanup(folder, KEEP_DAYS, KEEP_AT_LEAST):
-            logger.info(f"Deleted the old run log {path}")
+            logger.info(_("Deleted the old run log {0}").format(path))
     return folder
 
 
@@ -161,7 +163,7 @@ def finish() -> None:
     run_log = _run_log
     if run_log is None:
         return
-    logger.info(f"Log: {run_log.path}")
+    logger.info(_("Log: {0}").format(run_log.path))
     logger.removeHandler(run_log)
     run_log.close()
     for folder in _copy_dirs:
@@ -170,7 +172,7 @@ def finish() -> None:
             os.makedirs(target, exist_ok=True)
             shutil.copy2(run_log.path, target)
         except OSError as e:
-            logger.warning(f"Could not copy the log into {target}: {e}")
+            logger.warning(_("Could not copy the log into {0}: {1}").format(target, e))
     _copy_dirs.clear()
     for handler in _handlers:
         logger.removeHandler(handler)
@@ -200,7 +202,7 @@ def cleanup(folder: str, keep_days: int, keep_at_least: int) -> list:
             try:
                 os.remove(path)
             except OSError as e:
-                logger.warning(f"Could not delete the old run log {path}: {e}")
+                logger.warning(_("Could not delete the old run log {0}: {1}").format(path, e))
             else:
                 deleted.append(path)
     return deleted
@@ -248,23 +250,23 @@ def duration(seconds: float) -> str:
     hours, rest = divmod(seconds, 3600)
     minutes, seconds = divmod(rest, 60)
     if hours:
-        return f"{hours}h {minutes:02d}m {seconds:02d}s"
+        return _("{0}h {1:02d}m {2:02d}s").format(hours, minutes, seconds)
     if minutes:
-        return f"{minutes}m {seconds:02d}s"
-    return f"{seconds}s"
+        return _("{0}m {1:02d}s").format(minutes, seconds)
+    return _("{0}s").format(seconds)
 
 
 @contextlib.contextmanager
 def timed(step: str):
     """Log how long *step* took, or after how long it failed."""
     started = time.monotonic()
-    logger.info(f"{step}...")
+    logger.info(_("{0}...").format(step))
     try:
         yield
     except BaseException:
-        logger.error(f"{step} failed after {duration(time.monotonic() - started)}")
+        logger.error(_("{0} failed after {1}").format(step, duration(time.monotonic() - started)))
         raise
-    logger.info(f"{step} done in {duration(time.monotonic() - started)}")
+    logger.info(_("{0} done in {1}").format(step, duration(time.monotonic() - started)))
 
 
 def command_line(args: list) -> str:

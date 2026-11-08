@@ -17,6 +17,7 @@ import tomllib
 
 from app_release import platforms
 from app_release.builders.base import Builder, TOOL, run_version
+from app_release.lib.translations import _
 from app_release.model import EXECUTABLE, Artifact, BuildRun
 from app_release.versions import TomlVersion
 
@@ -30,7 +31,7 @@ class CargoBuilder(Builder):
     @classmethod
     def add_options(cls, parser) -> None:
         parser.add_argument("--target", action="append", metavar="TRIPLE",
-                            help="(cargo) build for this target instead of the configured ones; repeatable")
+                            help=_("(cargo) build for this target instead of the configured ones; repeatable"))
 
     def _manifest(self) -> dict:
         with open(os.path.join(self.repo, MANIFEST), "rb") as f:
@@ -49,7 +50,7 @@ class CargoBuilder(Builder):
         if not names and package:
             names = [package]
         if not names:
-            sys.exit(f"{MANIFEST} names no binary; set bins in [cargo].")
+            sys.exit(_("{0} names no binary; set bins in [cargo].").format(MANIFEST))
         return names
 
     def _cargo(self) -> list:
@@ -60,7 +61,7 @@ class CargoBuilder(Builder):
         return os.path.isfile(os.path.join(self.repo, MANIFEST))
 
     def describe(self) -> str:
-        return f"{MANIFEST} at its root"
+        return _("{0} at its root").format(MANIFEST)
 
     def default_version_source(self):
         return TomlVersion(self.repo, MANIFEST, "package.version")

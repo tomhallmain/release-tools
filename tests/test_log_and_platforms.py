@@ -6,22 +6,25 @@ import sys
 import pytest
 
 from app_release import log, platforms
+from app_release.lib.translations import _
 
 
-def test_timed_logs_the_duration_of_a_step(caplog):
+def test_timed_logs_the_duration_of_a_step(caplog, monkeypatch):
+    monkeypatch.setattr(log, "duration", lambda seconds: "5s")
     with caplog.at_level("INFO", logger="app_release"):
         with log.timed("Uploading"):
             pass
-    assert caplog.messages[0] == "Uploading..."
-    assert caplog.messages[-1].startswith("Uploading done in ")
+    assert caplog.messages[0] == _("{0}...").format("Uploading")
+    assert caplog.messages[-1] == _("{0} done in {1}").format("Uploading", "5s")
 
 
-def test_timed_logs_a_failed_step(caplog):
+def test_timed_logs_a_failed_step(caplog, monkeypatch):
+    monkeypatch.setattr(log, "duration", lambda seconds: "5s")
     with caplog.at_level("INFO", logger="app_release"):
         with pytest.raises(SystemExit):
             with log.timed("Uploading"):
                 raise SystemExit("broken")
-    assert caplog.messages[-1].startswith("Uploading failed after ")
+    assert caplog.messages[-1] == _("{0} failed after {1}").format("Uploading", "5s")
 
 
 @pytest.fixture
@@ -55,7 +58,7 @@ def test_a_run_log_is_named_for_the_version(run_log, tmp_path):
     (name,) = os.listdir(run_log)
     assert name.endswith("-v1.2.0.log")
     text = open(os.path.join(run_log, name), encoding="utf-8").read()
-    assert "before the version" in text and "after it" in text and f"Log: {os.path.join(run_log, name)}" in text
+    assert "before the version" in text and "after it" in text and _("Log: {0}").format(os.path.join(run_log, name)) in text
     assert os.listdir(tmp_path / "stage" / "logs") == [name]
     assert log.logger.handlers == []
 
@@ -107,7 +110,9 @@ def test_cleanup_is_off_unless_keep_days_is_set(tmp_path, monkeypatch):
 
 
 def test_duration():
-    assert log.duration(3 * 3600 + 4 * 60 + 5) == "3h 04m 05s"
+    assert log.duration(3 * 3600 + 4 * 60 + 5) == _("{0}h {1:02d}m {2:02d}s").format(3, 4, 5)
+    assert log.duration(4 * 60 + 5) == _("{0}m {1:02d}s").format(4, 5)
+    assert log.duration(5.4) == _("{0}s").format(5)
 
 
 @pytest.mark.parametrize("triple, name", [

@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 
+from app_release.lib.translations import _
 from app_release.log import logger
 
 VENV_DIR = ".venv-build"
@@ -48,7 +49,7 @@ def pinned_version(repo: str) -> str:
             if line and not line.startswith("#"):
                 version = _major_minor(line)
                 if not version:
-                    sys.exit(f"{path}: cannot read a Python version from {line!r}.")
+                    sys.exit(_("{0}: cannot read a Python version from {1!r}.").format(path, line))
                 return version
     return ""
 
@@ -81,28 +82,28 @@ def build_python(repo: str, explicit=None, record=None):
     if explicit:
         found = probe([explicit])
         if not found:
-            sys.exit(f"--toolchain: {explicit} does not run.")
-        return found[0], f"--toolchain, Python {found[1]}"
+            sys.exit(_("--toolchain: {0} does not run.").format(explicit))
+        return found[0], _("--toolchain, Python {0}").format(found[1])
 
     venv_python = _venv_python(os.path.join(repo, VENV_DIR))
     if os.path.isfile(venv_python):
         found = probe([venv_python])
         if not found:
-            sys.exit(f"{venv_python} does not run; delete {VENV_DIR} or pass --toolchain.")
+            sys.exit(_("{0} does not run; delete {1} or pass --toolchain.").format(venv_python, VENV_DIR))
         if pin and _major_minor(found[1]) != pin:
-            logger.warning(f"{VENV_DIR} has Python {found[1]}, {PIN_FILE} says {pin}; the build reuses "
-                           f"{VENV_DIR}. Delete it to build with {pin}.")
-        return found[0], f"the app's {VENV_DIR}, Python {found[1]}"
+            logger.warning(_("{0} has Python {1}, {2} says {3}; the build reuses {0}. Delete it to build "
+                             "with {3}.").format(VENV_DIR, found[1], PIN_FILE, pin))
+        return found[0], _("the app's {0}, Python {1}").format(VENV_DIR, found[1])
 
     recorded = record.toolchain.get("Python") if record else None
-    for version, source in ((pin, PIN_FILE), (_major_minor(recorded), "the last build")):
+    for version, source in ((pin, PIN_FILE), (_major_minor(recorded), _("the last build"))):
         if not version:
             continue
         found = _find_version(version)
         if not found:
-            sys.exit(f"{source} asks for Python {version}, which is not installed here; "
-                     "install it or pass --toolchain.")
-        return found[0], f"Python {found[1]}, from {source}"
+            sys.exit(_("{0} asks for Python {1}, which is not installed here; install it or pass "
+                       "--toolchain.").format(source, version))
+        return found[0], _("Python {0}, from {1}").format(found[1], source)
 
-    sys.exit(f"Cannot tell which Python to build with: the app has no {VENV_DIR}, no {PIN_FILE} "
-             "and no earlier build. Add a .python-version (e.g. 3.11) or pass --toolchain.")
+    sys.exit(_("Cannot tell which Python to build with: the app has no {0}, no {1} and no earlier build. "
+               "Add a {1} (e.g. 3.11) or pass --toolchain.").format(VENV_DIR, PIN_FILE))

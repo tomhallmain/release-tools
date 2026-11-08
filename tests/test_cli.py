@@ -9,6 +9,7 @@ import pytest
 from app_release import cli, log, vcs
 from app_release.builders.nuitka import NuitkaBuilder
 from app_release.destinations.github import GitHubRelease
+from app_release.lib.translations import _
 from helpers import HEAD, checkout_git, write_record
 
 
@@ -89,7 +90,8 @@ def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
     assert "gh release create v1.0.0" in capsys.readouterr().out
     logs = os.listdir(tmp_path / "logs" / tmp_path.name)
     assert len(logs) == 1 and logs[0].endswith("-v1.0.0.log")
-    assert "Staged in" in (tmp_path / "logs" / tmp_path.name / logs[0]).read_text(encoding="utf-8")
+    staged = _("Staged in {0}; release notes: {1}").format(str(stage), str(stage / "RELEASE_NOTES.md"))
+    assert staged in (tmp_path / "logs" / tmp_path.name / logs[0]).read_text(encoding="utf-8")
     assert os.listdir(stage / "logs") == logs
 
 

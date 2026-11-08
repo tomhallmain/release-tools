@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 from app_release import __version__, vcs
+from app_release.lib.translations import _
 from app_release.log import logger
 from app_release.model import DIRECTORY, EXECUTABLE, Asset
 from app_release.versions import VERSION_PATTERN
@@ -22,22 +23,23 @@ def behind(repo, artifact, version, record, head, head_tree, head_time):
     if record is None:
         # No build record: only the time is known.
         if os.path.getmtime(artifact.path) < head_time:
-            return "it is older than the checkout's last commit"
+            return _("it is older than the checkout's last commit")
         return None
     if os.path.getmtime(artifact.path) < record.written_at:
-        return "it predates the last build, so its source is unknown"
+        return _("it predates the last build, so its source is unknown")
     built = record.commit or ""
     if built != head:
         if not record.tree or record.tree != head_tree:
-            return f"it was built from {built[:10] or 'an unknown commit'}, the checkout is at {head[:10]}"
+            return _("it was built from {0}, the checkout is at {1}").format(
+                built[:10] or _("an unknown commit"), head[:10])
         if not vcs.in_history(repo, built, head):
             # The release tag goes on the build's commit, so it has to be in the history.
-            return (f"it was built from {built[:10]}, which has the checkout's files but is not "
-                    "in its history (rewritten since), so it cannot be tagged")
+            return _("it was built from {0}, which has the checkout's files but is not in its history "
+                     "(rewritten since), so it cannot be tagged").format(built[:10])
     if record.changes:
-        return "it was built with uncommitted changes"
+        return _("it was built with uncommitted changes")
     if record.version != version:
-        return f"it is version {record.version}, the checkout says {version}"
+        return _("it is version {0}, the checkout says {1}").format(record.version, version)
     return None
 
 
@@ -65,19 +67,19 @@ def rebuild_stale(repo, version, artifacts, builder, record, build_args, feature
     head_time = vcs.git(repo, "log", "-1", "--format=%ct")
     dirty = vcs.dirty(repo)
     if not head or not head_tree or not head_time or dirty is None:
-        sys.exit("git cannot tell which commit the checkout is at; build yourself and pass --no-build.")
+        sys.exit(_("git cannot tell which commit the checkout is at; build yourself and pass --no-build."))
     stale = []
     for artifact in artifacts:
         reason = behind(repo, artifact, version, record, head, head_tree, int(head_time))
         if reason:
-            logger.info(f"{artifact.key} is behind: {reason}.")
+            logger.info(_("{0} is behind: {1}.").format(artifact.key, reason))
             stale.append(artifact)
     if not stale:
-        logger.info(f"Every artifact was built from {head[:10]} or a commit with its files; nothing to rebuild.")
+        logger.info(_("Every artifact was built from {0} or a commit with its files; nothing to rebuild.").format(head[:10]))
         return False
     if dirty:
-        sys.exit("Tracked files have uncommitted changes; commit or stash them, so the build "
-                 "matches a commit, and run this again.")
+        sys.exit(_("Tracked files have uncommitted changes; commit or stash them, so the build "
+                   "matches a commit, and run this again."))
     runs = builder.plan(stale, record)
     builder.build(runs, build_args, version, recorded_features(features, build_args))
     return True
@@ -90,56 +92,56 @@ def check(repo, version, tag, record, artifacts, variant, variant_hints, max_ass
     """(errors, warnings) found before packaging."""
     errors, warnings = [], []
     if not re.fullmatch(VERSION_PATTERN, version):
-        errors.append(f"Version {version!r} is not up to four dot-separated numbers.")
+        errors.append(_("Version {0!r} is not up to four dot-separated numbers.").format(version))
     head = vcs.git(repo, "rev-parse", "HEAD")
     built = None
     if record is None:
-        warnings.append("No build record: cannot check what the artifacts were built from.")
+        warnings.append(_("No build record: cannot check what the artifacts were built from."))
     else:
         built = record.commit
         if record.version != version:
-            errors.append(f"The build is version {record.version}, the checkout says {version}.")
+            errors.append(_("The build is version {0}, the checkout says {1}.").format(record.version, version))
         if record.changes:
-            errors.append("The build was made with uncommitted changes; commit them and rebuild.")
+            errors.append(_("The build was made with uncommitted changes; commit them and rebuild."))
         elif record.changes is None:
-            warnings.append("The build could not tell whether it had uncommitted changes.")
+            warnings.append(_("The build could not tell whether it had uncommitted changes."))
         if built and head and built != head:
             if not record.tree or record.tree != vcs.git(repo, "rev-parse", "HEAD^{tree}"):
-                message = f"The build is from commit {built[:10]}, the checkout is at {head[:10]}."
+                message = _("The build is from commit {0}, the checkout is at {1}.").format(built[:10], head[:10])
                 # Its tag goes on the build's commit, which a later checkout contains.
                 if no_build and vcs.in_history(repo, built, head):
-                    warnings.append(message + " Packaging it as it is (--no-build).")
+                    warnings.append(message + " " + _("Packaging it as it is (--no-build)."))
                 else:
                     errors.append(message)
             elif not vcs.in_history(repo, built, head):
-                errors.append(f"The build is from commit {built[:10]}, which has the checkout's files but "
-                              "is not in its history (rewritten since the build), so it cannot be tagged; "
-                              "rebuild it.")
+                errors.append(_("The build is from commit {0}, which has the checkout's files but is not "
+                                "in its history (rewritten since the build), so it cannot be tagged; "
+                                "rebuild it.").format(built[:10]))
         for path in record.embedded_paths:
-            warnings.append(f"The build embeds the text of its checkout path, {path} "
-                            "(not the folder's contents), where anyone who downloads it can read it.")
+            warnings.append(_("The build embeds the text of its checkout path, {0} (not the folder's "
+                              "contents), where anyone who downloads it can read it.").format(path))
         for name, hint in variant_hints.items():
             installed = record.dependencies.get(name) or ""
             if isinstance(hint, dict) and hint.get("contains") and hint["contains"] in installed and not variant:
-                warnings.append(f"{name} {installed} is a {hint['variant']} build; "
-                                f"consider --variant {hint['variant']}.")
+                warnings.append(_("{0} {1} is a {2} build; consider --variant {2}.").format(
+                    name, installed, hint["variant"]))
         for artifact in artifacts:
             if os.path.getmtime(artifact.path) < record.written_at:
-                errors.append(f"{artifact.path} predates the last build; rebuild it, "
-                              "or leave it out with --products.")
+                errors.append(_("{0} predates the last build; rebuild it, or leave it out with "
+                                "--products.").format(artifact.path))
     tagged = vcs.tagged_commit(repo, tag)
     expected = built or head
     if tagged and expected and tagged != expected:
         if retag:
-            warnings.append(f"Tag {tag} points at {tagged[:10]}; --retag moves it to {expected[:10]}.")
+            warnings.append(_("Tag {0} points at {1}; --retag moves it to {2}.").format(tag, tagged[:10], expected[:10]))
         else:
-            errors.append(f"Tag {tag} points at {tagged[:10]}, not the build's commit {expected[:10]}; "
-                          "--retag moves it.")
+            errors.append(_("Tag {0} points at {1}, not the build's commit {2}; --retag moves it.").format(
+                tag, tagged[:10], expected[:10]))
     if max_asset_bytes:
         for artifact in artifacts:
             if artifact.kind != DIRECTORY and os.path.getsize(artifact.path) >= max_asset_bytes:
-                errors.append(f"{artifact.path} is {max_asset_bytes / 1024 ** 3:.0f} GiB or larger, "
-                              "more than a destination accepts as an asset.")
+                errors.append(_("{0} is {1:.0f} GiB or larger, more than a destination accepts as an "
+                                "asset.").format(artifact.path, max_asset_bytes / 1024 ** 3))
     return errors, warnings
 
 
@@ -168,15 +170,15 @@ def stage(out_dir, app_name, version, variant, artifacts, lock_files) -> tuple:
 
     def add(asset, platform):
         if asset.name in names:
-            sys.exit(f"Two artifacts would both be staged as {asset.name}; give them distinct "
-                     "product names.")
+            sys.exit(_("Two artifacts would both be staged as {0}; give them distinct product "
+                       "names.").format(asset.name))
         names.add(asset.name)
         groups.setdefault(platform, []).append(asset)
 
     for artifact in artifacts:
         name = f"{artifact.product}-{suffix(version, artifact.platform, variant)}{artifact.extension}"
         target = os.path.join(out_dir, name)
-        logger.info(f"Staging {artifact.path} -> {name}")
+        logger.info(_("Staging {0} -> {1}").format(artifact.path, name))
         if artifact.kind == DIRECTORY:
             if os.path.exists(target):
                 os.remove(target)
@@ -205,6 +207,7 @@ def stage(out_dir, app_name, version, variant, artifacts, lock_files) -> tuple:
 
 
 # Release notes
+# In English whatever the locale: they are published with the release.
 
 def changes(repo: str, commit: str) -> list:
     """Subjects of the commits since the previous v* tag, as notes lines."""
@@ -268,10 +271,10 @@ def edit(path: str) -> None:
         else:
             result = subprocess.run([*shlex.split(editor), path])
     except OSError as e:
-        logger.warning(f"Cannot start the editor {editor!r}: {e}")
+        logger.warning(_("Cannot start the editor {0!r}: {1}").format(editor, e))
         return
     if result.returncode != 0:
-        logger.warning(f"The editor {editor!r} exited with code {result.returncode}.")
+        logger.warning(_("The editor {0!r} exited with code {1}.").format(editor, result.returncode))
 
 
 def approve_notes(path: str) -> None:
@@ -280,13 +283,15 @@ def approve_notes(path: str) -> None:
     while True:
         with open(path, "r", encoding="utf-8") as f:
             print(f"\n----- {path} -----\n{f.read().rstrip()}\n-----")
-        answer = input("Release notes: [a]pprove, [e]dit, or abort? [a/e/N] ").strip().lower()
-        if answer in ("a", "approve"):
+        # English answers work in every language.
+        approve, edit_ = _("approve").lower(), _("edit").lower()
+        answer = input(_("Release notes: [a]pprove, [e]dit, or abort? [a/e/N] ")).strip().lower()
+        if answer in ("a", "approve", approve[:1], approve):
             return
-        if answer not in ("e", "edit"):
-            sys.exit("Not run.")
-        print("Waiting for the editor to close (an editor that returns at once, such as "
-              "`code`, needs its wait option, e.g. EDITOR=\"code --wait\").")
+        if answer not in ("e", "edit", edit_[:1], edit_):
+            sys.exit(_("Not run."))
+        print(_("Waiting for the editor to close (an editor that returns at once, such as "
+                "`code`, needs its wait option, e.g. EDITOR=\"code --wait\")."))
         edit(path)
 
 

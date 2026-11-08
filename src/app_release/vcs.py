@@ -7,6 +7,7 @@ import hashlib
 import subprocess
 import sys
 
+from app_release.lib.translations import _
 from app_release.log import logger
 
 
@@ -52,7 +53,7 @@ def tag_steps(repo: str, tag: str, commit: str, remote: str, retag: bool = False
     out what is done already, so that a rerun resumes."""
     on_remote = git(repo, "ls-remote", "--tags", remote, f"refs/tags/{tag}")
     if on_remote is None:
-        sys.exit(f"Cannot reach the git remote {remote}.")
+        sys.exit(_("Cannot reach the git remote {0}.").format(remote))
     steps = []
     local = git(repo, "rev-parse", "-q", "--verify", f"refs/tags/{tag}^{{commit}}")
     if not local:
@@ -62,7 +63,7 @@ def tag_steps(repo: str, tag: str, commit: str, remote: str, retag: bool = False
     # A pushed tag carries its commits, but the branch on the remote stays where it was.
     branch = git(repo, "symbolic-ref", "--short", "-q", "HEAD")
     if not branch:
-        logger.warning(f"HEAD is not on a branch; push the branch with {commit[:10]} to {remote} yourself.")
+        logger.warning(_("HEAD is not on a branch; push the branch with {0} to {1} yourself.").format(commit[:10], remote))
     else:
         remote_head = (git(repo, "ls-remote", remote, f"refs/heads/{branch}") or "").split("\t")[0]
         # False also when the remote has commits not fetched here; the push then fails and says so.

@@ -21,6 +21,7 @@ import subprocess
 import sys
 
 from app_release.destinations.base import Destination
+from app_release.lib.translations import _
 from app_release.log import command_line, logger
 from app_release.versions import VERSION_PATTERN
 
@@ -40,11 +41,11 @@ class GitHubRelease(Destination):
 
     def check_ready(self) -> None:
         if not shutil.which("gh"):
-            sys.exit("gh (GitHub CLI) is not installed; install it, run `gh auth login`, "
-                     "or pass --no-upload.")
+            sys.exit(_("gh (GitHub CLI) is not installed; install it, run `gh auth login`, "
+                       "or pass --no-upload."))
         # Checked before anything runs, so a missing login cannot stop the run after the tag is pushed.
         if subprocess.run(["gh", "auth", "status"], cwd=self.repo, capture_output=True).returncode != 0:
-            sys.exit("gh is not logged in to GitHub; run `gh auth login` (or set GH_TOKEN) and run this again.")
+            sys.exit(_("gh is not logged in to GitHub; run `gh auth login` (or set GH_TOKEN) and run this again."))
 
     def _create(self, release, files) -> list:
         return ["gh", "release", "create", release.tag, *files, "--title", release.title,
@@ -59,7 +60,7 @@ class GitHubRelease(Destination):
     def _keep(self) -> int:
         keep = self.config.get("keep", 0)
         if not isinstance(keep, int) or isinstance(keep, bool) or keep < 0:
-            sys.exit(f"Configuration: [github] keep must be a whole number of releases, not {keep!r}.")
+            sys.exit(_("Configuration: [github] keep must be a whole number of releases, not {0!r}.").format(keep))
         return keep
 
     def plan(self, release) -> list:
@@ -87,7 +88,7 @@ class GitHubRelease(Destination):
                                  "tagName,isDraft,isPrerelease,isImmutable,isLatest"],
                                 cwd=self.repo, capture_output=True, text=True)
         if listed.returncode != 0:
-            sys.exit(f"Cannot list the GitHub releases to prune: {listed.stderr.strip()}")
+            sys.exit(_("Cannot list the GitHub releases to prune: {0}").format(listed.stderr.strip()))
         published = {r["tagName"]: r for r in json.loads(listed.stdout)
                      if re.fullmatch(rf"v{VERSION_PATTERN}", r["tagName"])
                      and not r["isDraft"] and not r["isPrerelease"]}
@@ -99,7 +100,7 @@ class GitHubRelease(Destination):
             if tag == release.tag or published[tag]["isLatest"]:
                 continue
             if published[tag]["isImmutable"]:
-                logger.warning(f"Not pruning {tag}: it is an immutable release, whose assets cannot be deleted.")
+                logger.warning(_("Not pruning {0}: it is an immutable release, whose assets cannot be deleted.").format(tag))
                 continue
             for asset in self._assets(tag) or []:
                 if not any(fnmatch.fnmatch(asset["name"], pattern) for pattern in spare):
@@ -108,13 +109,13 @@ class GitHubRelease(Destination):
 
     def dry_run_lines(self, release) -> list:
         files = release.files()
-        lines = ["GitHub: create the draft release with",
+        lines = [_("GitHub: create the draft release with"),
                  "  " + command_line(self._create(release, files)),
-                 "or, for a release that exists already,",
+                 _("or, for a release that exists already,"),
                  "  " + command_line(["gh", "release", "upload", release.tag, *files, "--clobber"])]
         keep = self._keep()
         if keep:
-            lines.append(f"With --publish, also delete the downloads of releases older than the newest {keep}.")
+            lines.append(_("With --publish, also delete the downloads of releases older than the newest {0}.").format(keep))
         return lines
 
     def reads_notes(self, steps: list) -> bool:

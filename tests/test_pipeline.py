@@ -6,6 +6,7 @@ import os
 import pytest
 
 from app_release import __version__, pipeline, vcs
+from app_release.lib.translations import _
 from app_release.model import DIRECTORY, EXECUTABLE, PACKAGE, Artifact
 from helpers import BUILT, HEAD, TREE, built, checkout_git, fake_git
 
@@ -104,7 +105,9 @@ def test_an_ancestor_with_the_same_tree_is_current(tmp_path, monkeypatch):
 def test_a_rewritten_commit_with_the_same_tree_is_behind(tmp_path, monkeypatch):
     monkeypatch.setattr(vcs, "git", fake_git())
     record, artifact = built(tmp_path)
-    assert "cannot be tagged" in _behind(tmp_path, record, artifact)
+    assert _behind(tmp_path, record, artifact) == _(
+        "it was built from {0}, which has the checkout's files but is not in its history "
+        "(rewritten since), so it cannot be tagged").format(BUILT[:10])
 
 
 def test_a_different_tree_is_behind(tmp_path, monkeypatch):
@@ -134,7 +137,7 @@ def test_an_artifact_older_than_the_record_is_behind(tmp_path, monkeypatch):
 
 
 def test_without_a_record_an_artifact_older_than_head_is_behind(tmp_path):
-    _, artifact = built(tmp_path)
+    _record, artifact = built(tmp_path)
     os.utime(artifact.path, (100, 100))
     assert "older than" in pipeline.behind(str(tmp_path), artifact, "1.0.0", None, HEAD, TREE, 200)
     assert pipeline.behind(str(tmp_path), artifact, "1.0.0", None, HEAD, TREE, 50) is None
@@ -149,22 +152,23 @@ def _check(tmp_path, record, artifact, **kwargs):
 def test_check_accepts_an_ancestor_with_the_same_tree(tmp_path, monkeypatch):
     monkeypatch.setattr(vcs, "git", fake_git(ancestors={BUILT}))
     record, artifact = built(tmp_path)
-    errors, _ = _check(tmp_path, record, artifact)
+    errors, _warnings = _check(tmp_path, record, artifact)
     assert errors == []
 
 
 def test_check_refuses_a_rewritten_commit_with_the_same_tree(tmp_path, monkeypatch):
     monkeypatch.setattr(vcs, "git", fake_git())
     record, artifact = built(tmp_path)
-    errors, _ = _check(tmp_path, record, artifact)
-    assert len(errors) == 1
-    assert "cannot be tagged" in errors[0]
+    errors, _warnings = _check(tmp_path, record, artifact)
+    assert errors == [_("The build is from commit {0}, which has the checkout's files but is not "
+                        "in its history (rewritten since the build), so it cannot be tagged; "
+                        "rebuild it.").format(BUILT[:10])]
 
 
 def test_check_refuses_a_build_from_a_different_tree(tmp_path, monkeypatch):
     monkeypatch.setattr(vcs, "git", fake_git(tree="u" * 40, ancestors={BUILT}))
     record, artifact = built(tmp_path)
-    errors, _ = _check(tmp_path, record, artifact)
+    errors, _warnings = _check(tmp_path, record, artifact)
     assert len(errors) == 1
     assert HEAD[:10] in errors[0] and BUILT[:10] in errors[0]
 
@@ -179,7 +183,7 @@ def test_no_build_only_warns_about_an_older_ancestor(tmp_path, monkeypatch):
 def test_check_refuses_a_tag_on_another_commit(tmp_path, monkeypatch):
     monkeypatch.setattr(vcs, "git", fake_git(tag="c" * 40))
     record, artifact = built(tmp_path, commit=HEAD)
-    errors, _ = _check(tmp_path, record, artifact)
+    errors, _warnings = _check(tmp_path, record, artifact)
     assert len(errors) == 1
     assert "v1.0.0" in errors[0]
 
@@ -195,7 +199,7 @@ def test_check_warns_about_an_embedded_checkout_path(tmp_path, monkeypatch):
     monkeypatch.setattr(vcs, "git", fake_git())
     record, artifact = built(tmp_path, commit=HEAD)
     record.embedded_paths = ["C:\\repos\\App"]
-    _, warnings = _check(tmp_path, record, artifact)
+    _errors, warnings = _check(tmp_path, record, artifact)
     assert any("C:\\repos\\App" in w for w in warnings)
 
 
@@ -203,30 +207,31 @@ def test_a_variant_hint_suggests_a_variant(tmp_path, monkeypatch):
     monkeypatch.setattr(vcs, "git", fake_git())
     record, artifact = built(tmp_path, commit=HEAD, packages={"torch": "2.4.0+cu121"})
     hints = {"torch": {"contains": "+cu", "variant": "cuda"}}
-    _, warnings = pipeline.check(str(tmp_path), "1.0.0", "v1.0.0", record, [artifact], None, hints, None)
+    _errors, warnings = pipeline.check(str(tmp_path), "1.0.0", "v1.0.0", record, [artifact], None, hints, None)
     assert any("--variant cuda" in w for w in warnings)
-    _, warnings = pipeline.check(str(tmp_path), "1.0.0", "v1.0.0", record, [artifact], "cuda", hints, None)
+    _errors, warnings = pipeline.check(str(tmp_path), "1.0.0", "v1.0.0", record, [artifact], "cuda", hints, None)
     assert not any("--variant" in w for w in warnings)
 
 
 def test_an_asset_over_the_limit_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(vcs, "git", fake_git())
     record, artifact = built(tmp_path, commit=HEAD)
-    errors, _ = pipeline.check(str(tmp_path), "1.0.0", "v1.0.0", record, [artifact], None, {}, 2)
-    assert any("larger" in e for e in errors)
+    errors, _warnings = pipeline.check(str(tmp_path), "1.0.0", "v1.0.0", record, [artifact], None, {}, 2)
+    assert _("{0} is {1:.0f} GiB or larger, more than a destination accepts as an "
+             "asset.").format(artifact.path, 2 / 1024 ** 3) in errors
 
 
 # feature_args
 
 def test_a_recorded_feature_adds_its_rebuild_option(tmp_path):
-    record, _ = built(tmp_path, with_oqs=True)
+    record, _artifact = built(tmp_path, with_oqs=True)
     features = {"oqs": {"rebuild_option": "--with-oqs"}}
     assert pipeline.feature_args(record, features, ["--jobs=4"]) == ["--jobs=4", "--with-oqs"]
     assert pipeline.feature_args(record, features, ["--with-oqs"]) == ["--with-oqs"]
 
 
 def test_an_absent_feature_adds_nothing(tmp_path):
-    record, _ = built(tmp_path, with_oqs=False)
+    record, _artifact = built(tmp_path, with_oqs=False)
     assert pipeline.feature_args(record, {"oqs": {"rebuild_option": "--with-oqs"}}, []) == []
     assert pipeline.feature_args(None, {"oqs": {"rebuild_option": "--with-oqs"}}, []) == []
 
@@ -327,7 +332,7 @@ def test_a_directory_is_zipped(tmp_path):
     folder = tmp_path / "App"
     folder.mkdir()
     (folder / "app.bin").write_bytes(b"x")
-    downloads, _ = pipeline.stage(str(tmp_path / "out"), "App", "1.0.0", None,
+    downloads, _sums = pipeline.stage(str(tmp_path / "out"), "App", "1.0.0", None,
                                   [Artifact("App", str(folder), DIRECTORY, "linux-x64")], [])
     assert downloads[0].name == "App-1.0.0-linux-x64.zip"
     with zipfile.ZipFile(downloads[0].path) as archive:
@@ -361,13 +366,13 @@ def test_release_notes_name_the_tool_version(tmp_path, monkeypatch):
 
 
 def test_release_notes_name_toolchain_and_dependencies(tmp_path, monkeypatch):
-    record, _ = built(tmp_path, python="3.11.9", packages={"torch": "2.4.0"})
+    record, _artifact = built(tmp_path, python="3.11.9", packages={"torch": "2.4.0"})
     assert "Python 3.11.9, torch 2.4.0." in _notes(tmp_path, monkeypatch, record)
 
 
 def test_release_notes_say_whether_a_feature_is_included(tmp_path, monkeypatch):
     features = {"oqs": {"rebuild_option": "--with-oqs", "note": "OQS (post-quantum) encryption"}}
-    record, _ = built(tmp_path, with_oqs=False)
+    record, _artifact = built(tmp_path, with_oqs=False)
     assert "- OQS (post-quantum) encryption: not included." in _notes(tmp_path, monkeypatch, record,
                                                                       features=features)
 
@@ -440,5 +445,5 @@ def test_an_irreversible_destination_with_steps_is_named(tmp_path, monkeypatch):
     registry = _Destination([["cargo", "publish"]], calls=[])
     registry.reversible = False
     registry.name = "crates-io"
-    _, _, irreversible = pipeline.publish_steps(_release(tmp_path), [registry])
+    _steps, _reads, irreversible = pipeline.publish_steps(_release(tmp_path), [registry])
     assert irreversible == ["crates-io"]
