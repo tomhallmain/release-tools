@@ -8,6 +8,7 @@ import pytest
 
 from app_release import cli
 from app_release.builders import base, nuitka
+from app_release.lib.translations import _
 from app_release.model import EXECUTABLE, Artifact
 from helpers import Options, recording_command
 
@@ -108,6 +109,99 @@ def test_the_lock_file_keeps_its_asset_label(tmp_path):
     lock.parent.mkdir(parents=True)
     lock.write_text("", encoding="utf-8")
     assert builder.lock_files() == [(str(lock), "requirements.lock.txt")]
+
+
+# macOS app bundles
+
+def _dist(tmp_path, monkeypatch, bare_newer=None):
+    """dist/Muse.app on macOS, plus a bare dist/Muse when *bare_newer* is given."""
+    monkeypatch.setattr(nuitka.sys, "platform", "darwin")
+    (tmp_path / "build_exe.py").write_text("", encoding="utf-8")
+    bundle = tmp_path / "dist" / "Muse.app"
+    (bundle / "Contents" / "MacOS").mkdir(parents=True)
+    os.utime(bundle, (1000, 1000))
+    if bare_newer is not None:
+        bare = tmp_path / "dist" / "Muse"
+        bare.write_bytes(b"x")
+        os.chmod(bare, 0o755)
+        os.utime(bare, (2000, 2000) if bare_newer else (500, 500))
+    return nuitka.NuitkaBuilder(str(tmp_path), {}, Options())
+
+
+def test_an_app_bundle_is_found_on_macos(tmp_path, monkeypatch):
+    artifacts = _dist(tmp_path, monkeypatch).artifacts()
+    assert [(a.product, a.kind, os.path.basename(a.path)) for a in artifacts] == [("Muse", "dir", "Muse.app")]
+
+
+def _both_warning(tmp_path):
+    dist = tmp_path / "dist"
+    return _("Both {0} and {1} exist and the executable is newer; packaging the app bundle. Delete whichever "
+             "the build no longer makes.").format(str(dist / "Muse"), str(dist / "Muse.app"))
+
+
+def test_the_bundle_wins_over_an_older_bare_executable_silently(tmp_path, monkeypatch, caplog):
+    artifacts = _dist(tmp_path, monkeypatch, bare_newer=False).artifacts()
+    assert [os.path.basename(a.path) for a in artifacts] == ["Muse.app"]
+    assert _both_warning(tmp_path) not in caplog.text
+
+
+def test_a_newer_bare_executable_beside_the_bundle_is_warned_about(tmp_path, monkeypatch, caplog):
+    artifacts = _dist(tmp_path, monkeypatch, bare_newer=True).artifacts()
+    assert [os.path.basename(a.path) for a in artifacts] == ["Muse.app"]
+    assert _both_warning(tmp_path) in caplog.text
+
+
+# Preflight
+
+def _host(monkeypatch, platform, commands=(), xcode=True):
+    """Pretend to run on *platform* with only *commands* on PATH."""
+    monkeypatch.setattr(nuitka.sys, "platform", platform)
+    monkeypatch.setattr(nuitka.shutil, "which", lambda c: f"/usr/bin/{c}" if c in commands else None)
+    monkeypatch.setattr(nuitka, "run_version", lambda command: "/Library/Developer" if xcode else None)
+
+
+def _configured(tmp_path, **settings):
+    (tmp_path / "build_exe.py").write_text("", encoding="utf-8")
+    return nuitka.NuitkaBuilder(str(tmp_path), {"nuitka": settings}, Options())
+
+
+def test_preflight_passes_with_a_compiler_and_the_required_commands(tmp_path, monkeypatch):
+    _host(monkeypatch, "linux", commands={"gcc", "vlc"})
+    _configured(tmp_path, requires=["vlc"]).preflight()
+
+
+def test_preflight_names_a_missing_required_command(tmp_path, monkeypatch):
+    _host(monkeypatch, "linux", commands={"gcc"})
+    with pytest.raises(SystemExit) as exited:
+        _configured(tmp_path, requires=["vlc"]).preflight()
+    assert "vlc" in str(exited.value.code)
+
+
+def test_preflight_refuses_requires_that_is_not_a_list(tmp_path, monkeypatch):
+    _host(monkeypatch, "linux", commands={"gcc", "vlc"})
+    with pytest.raises(SystemExit) as exited:
+        _configured(tmp_path, requires="vlc").preflight()
+    assert str(exited.value.code) == _("Configuration: [{0}] requires must be a list of command names, "
+                                       "not {1!r}.").format("nuitka", "vlc")
+
+
+def test_preflight_needs_a_compiler_on_linux(tmp_path, monkeypatch):
+    _host(monkeypatch, "linux")
+    with pytest.raises(SystemExit) as exited:
+        _configured(tmp_path).preflight()
+    assert str(exited.value.code) == _("Nuitka needs a C compiler (gcc or clang); install one and run this again.")
+
+
+def test_preflight_needs_the_command_line_tools_on_macos(tmp_path, monkeypatch):
+    _host(monkeypatch, "darwin", commands={"cc"}, xcode=False)
+    with pytest.raises(SystemExit) as exited:
+        _configured(tmp_path).preflight()
+    assert "xcode-select --install" in str(exited.value.code)
+
+
+def test_preflight_leaves_the_compiler_to_nuitka_on_windows(tmp_path, monkeypatch):
+    _host(monkeypatch, "win32")
+    _configured(tmp_path).preflight()
 
 
 def test_defaults_carry_oqs_and_the_torch_hint():

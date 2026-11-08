@@ -1,7 +1,9 @@
 """app_release.cli: choosing the backends, and a whole run to staging with
 --no-upload (git stubbed, nothing built)."""
 
+import json
 import os
+import subprocess
 import sys
 
 import pytest
@@ -10,7 +12,12 @@ from app_release import cli, log, vcs
 from app_release.builders.nuitka import NuitkaBuilder
 from app_release.destinations.github import GitHubRelease
 from app_release.lib.translations import _
-from helpers import HEAD, checkout_git, write_record
+from helpers import HEAD, checkout_git, upstream_answers, write_record
+
+
+@pytest.fixture(autouse=True)
+def _no_codesign(monkeypatch):
+    monkeypatch.setattr(cli.pipeline, "developer_id_signed", lambda path: False)
 
 
 def _opts(*argv):
@@ -57,11 +64,8 @@ def test_python_is_an_alias_of_toolchain():
     assert _opts("--python", "/usr/bin/python3.11").toolchain == "/usr/bin/python3.11"
 
 
-def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
-    """VERSION, build_exe.py, a build record from HEAD and an executable after it:
-    a --no-build --no-upload run stages the assets under today's names."""
-    monkeypatch.setenv(log.LOG_DIR_ENV, str(tmp_path / "logs"))
-    monkeypatch.setattr(vcs, "git", checkout_git())
+def _nuitka_app(tmp_path):
+    """VERSION, build_exe.py, a build record from HEAD and an executable after it."""
     (tmp_path / "build_exe.py").write_text("", encoding="utf-8")
     (tmp_path / "VERSION").write_text("1.0.0\n", encoding="utf-8")
     record_dir = tmp_path / "build" / "nuitka"
@@ -74,15 +78,30 @@ def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
     os.chmod(exe, 0o755)
     later = os.path.getmtime(record) + 10
     os.utime(exe, (later, later))
+
+
+def _main(*argv):
     try:
-        cli.main([str(tmp_path), "--no-build", "--no-upload"])
+        cli.main(list(argv))
     finally:
         log.finish()
+
+
+def _no_build(*args, **kwargs):
+    raise AssertionError("built")
+
+
+def test_a_nuitka_app_is_staged_under_release_names(tmp_path, monkeypatch, capsys):
+    """A --no-build --no-upload run stages the assets under their release names."""
+    monkeypatch.setenv(log.LOG_DIR_ENV, str(tmp_path / "logs"))
+    monkeypatch.setattr(vcs, "git", checkout_git())
+    _nuitka_app(tmp_path)
+    _main(str(tmp_path), "--no-build", "--no-upload")
     from app_release import platforms
     stage = tmp_path / "dist" / "release" / "v1.0.0"
     suffix = f"1.0.0-{platforms.host()}"
     names = sorted(os.listdir(stage))
-    assert f"App-{suffix}{'.exe' if sys.platform == 'win32' else ''}" in names
+    assert f"App-{suffix}{'.exe' if sys.platform == 'win32' else '.tar.gz'}" in names
     assert f"App-{suffix}-requirements.lock.txt" in names
     assert f"SHA256SUMS-{suffix}.txt" in names
     notes = (stage / "RELEASE_NOTES.md").read_text(encoding="utf-8")
@@ -93,6 +112,127 @@ def test_a_nuitka_app_is_staged_as_before(tmp_path, monkeypatch, capsys):
     staged = _("Staged in {0}; release notes: {1}").format(str(stage), str(stage / "RELEASE_NOTES.md"))
     assert staged in (tmp_path / "logs" / tmp_path.name / logs[0]).read_text(encoding="utf-8")
     assert os.listdir(stage / "logs") == logs
+
+
+def test_an_unreachable_remote_stops_an_upload_before_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git())
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    _nuitka_app(tmp_path)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path), "--destination", "none")
+    assert str(exited.value.code) == _("Cannot reach the git remote {0} to check tag {1} there.").format(
+        "origin", "v1.0.0")
+
+
+def test_a_checkout_behind_its_upstream_stops_before_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git(answers=upstream_answers(behind=2)))
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    _nuitka_app(tmp_path)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path), "--no-upload")
+    assert str(exited.value.code) == _("{0} has {1} commit(s) this checkout lacks; pull first. (--force goes "
+                                       "ahead without them.)").format("origin/main", 2)
+
+
+def test_force_goes_ahead_behind_the_upstream(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git(answers=upstream_answers(behind=2)))
+    _nuitka_app(tmp_path)
+    _main(str(tmp_path), "--no-build", "--no-upload", "--force")
+    assert (tmp_path / "dist" / "release" / "v1.0.0").is_dir()
+
+
+def test_a_failed_fetch_stops_an_upload_but_not_a_trial(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git(answers=upstream_answers(fetched=False)))
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    _nuitka_app(tmp_path)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path), "--destination", "none")
+    assert str(exited.value.code) == _("Cannot fetch {0} to check that the checkout is up to date.").format(
+        "origin/main")
+    _main(str(tmp_path), "--no-build", "--no-upload")
+    assert (tmp_path / "dist" / "release" / "v1.0.0").is_dir()
+
+
+def test_an_up_to_date_checkout_goes_ahead(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git(answers=upstream_answers(behind=0)))
+    _nuitka_app(tmp_path)
+    _main(str(tmp_path), "--no-build", "--no-upload")
+    assert (tmp_path / "dist" / "release" / "v1.0.0").is_dir()
+
+
+def _tagged_with_draft(tmp_path, monkeypatch, draft):
+    """An app whose current version 1.0.0 is tagged, with GitHub reporting *draft* for it."""
+    monkeypatch.setattr(vcs, "git", checkout_git(answers={
+        ("rev-parse", "-q", "--verify", "refs/tags/v1.0.0"): HEAD,
+        ("rev-parse", "-q", "--verify", "refs/tags/v1.0.0^{commit}"): HEAD}))
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    monkeypatch.setattr(GitHubRelease, "draft_in_progress", lambda self, tag: draft)
+    _nuitka_app(tmp_path)
+
+
+def test_bump_is_refused_while_the_current_version_is_a_draft(tmp_path, monkeypatch):
+    _tagged_with_draft(tmp_path, monkeypatch, draft=True)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path), "--bump", "minor", "--no-upload")
+    assert str(exited.value.code) == _("{0} is a draft release in progress on {1}; build it on the remaining "
+                                       "platforms, or publish it, before bumping (--force bumps anyway).").format(
+        "v1.0.0", "github")
+    assert (tmp_path / "VERSION").read_text(encoding="utf-8") == "1.0.0\n"
+
+
+def test_an_unknown_draft_state_stops_a_bump_that_will_upload(tmp_path, monkeypatch):
+    _tagged_with_draft(tmp_path, monkeypatch, draft=None)
+    monkeypatch.setattr(GitHubRelease, "check_ready", lambda self: None)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path), "--bump", "minor")
+    assert str(exited.value.code) == _("Cannot tell whether {0} is a draft release on {1}; not bumping.").format(
+        "v1.0.0", "github")
+    assert (tmp_path / "VERSION").read_text(encoding="utf-8") == "1.0.0\n"
+
+
+def test_bump_goes_ahead_when_the_current_version_is_published(tmp_path, monkeypatch):
+    bumped = []
+    monkeypatch.setattr(cli, "bump", lambda repo, source, version, part, no_build: bumped.append(part) or version)
+    _tagged_with_draft(tmp_path, monkeypatch, draft=False)
+    _main(str(tmp_path), "--bump", "minor", "--no-build", "--no-upload")
+    assert bumped == ["minor"]
+
+
+def test_status_runs_only_reading_commands(tmp_path, monkeypatch, capsys):
+    git_calls, gh_calls = [], []
+    answers = {("ls-remote", "origin", "refs/tags/v1.0.0", "refs/tags/v1.0.0^{}"): f"{HEAD}\trefs/tags/v1.0.0"}
+    fake = checkout_git(answers=answers)
+    monkeypatch.setattr(vcs, "git", lambda repo, *args, **kw: git_calls.append(args) or fake(repo, *args))
+    from app_release.destinations import github
+    monkeypatch.setattr(github.shutil, "which", lambda name: "gh")
+    monkeypatch.setattr(github.subprocess, "run", lambda args, **kw: gh_calls.append(args) or
+                        subprocess.CompletedProcess(args, 0, stderr="", stdout=json.dumps(
+                            {"isDraft": True, "body": "", "assets": [
+                                {"name": "SHA256SUMS-1.0.0-windows-x64.txt", "size": 1}]})))
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    _nuitka_app(tmp_path)
+    (tmp_path / "release.toml").write_text('platforms = ["windows-x64", "linux-x64"]\n', encoding="utf-8")
+    _main(str(tmp_path), "--status")
+    out = capsys.readouterr().out
+    assert _("Tag {0}: here {1}; on {2} {3}.").format("v1.0.0", _("absent"), "origin",
+                                                     _("at {0}").format(HEAD[:10])) in out
+    assert _("GitHub: release {0} is a draft, with {1} asset(s).").format("v1.0.0", 1) in out
+    assert _("Configured platforms missing: {0}.").format("linux-x64") in out
+    assert {args[0] for args in git_calls} <= {"rev-parse", "ls-remote"}
+    assert gh_calls and all(args[:3] == ["gh", "release", "view"] for args in gh_calls)
+    assert not (tmp_path / "dist" / "release").exists()
+
+
+def test_a_missing_gh_stops_an_upload_before_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(vcs, "git", checkout_git())
+    monkeypatch.setattr(cli.pipeline, "rebuild_stale", _no_build)
+    from app_release.destinations import github
+    monkeypatch.setattr(github.shutil, "which", lambda name: None)
+    _nuitka_app(tmp_path)
+    with pytest.raises(SystemExit) as exited:
+        _main(str(tmp_path))
+    assert str(exited.value.code) == _("gh (GitHub CLI) is not installed; install it, run `gh auth login`, "
+                                       "or pass --no-upload.")
 
 
 def test_the_old_command_name_fails_naming_app_release():

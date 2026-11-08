@@ -27,5 +27,11 @@ def from_triple(triple: str) -> str:
     return f"{os_name}-{arch}" if arch and os_name else triple
 
 
+def glibc_version() -> str:
+    """This machine's glibc version, e.g. "2.35"; "" off glibc."""
+    library, version = platform.libc_ver()
+    return version if library == "glibc" else ""
+
+
 def triple_is_windows(triple: str) -> bool:
     return "-windows-" in f"{triple}-"

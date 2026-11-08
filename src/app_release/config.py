@@ -7,6 +7,7 @@ defaults, which are those of a Nuitka-built app released on GitHub.
     version = "VERSION"                # see versions.py; default: the builder's
     app_name = "SDRunner"              # default: shortest product minus a secondary suffix
     secondary_suffixes = ["Headless"]
+    platforms = ["windows-x64", "macos-arm64", "linux-x64"]   # what --publish requires; default: none
 
     [features]                         # merged onto the builder's; false removes one
     oqs = { rebuild_option = "--with-oqs", note = "OQS (post-quantum) encryption" }
@@ -17,8 +18,16 @@ defaults, which are those of a Nuitka-built app released on GitHub.
     [notes]
     extra = ["- Some line."]
     unsigned_windows = true            # the SmartScreen line for Windows executables
+    unsigned_macos = true              # the Gatekeeper line for macOS builds without a Developer ID
+    linux_glibc = true                 # the glibc version a Linux build needs
+
+    [stage]
+    archive_unix_executables = true    # macOS and Linux executables as .tar.gz, keeping the executable bit
 
     [<builder or destination name>]    # that backend's own settings
+
+    [nuitka]                           # any builder's table
+    requires = ["vlc"]                 # commands the build needs on PATH, checked before it starts
 """
 import os
 import sys
@@ -29,7 +38,7 @@ from app_release.lib.translations import _
 RELEASE_TOML = "release.toml"
 PYPROJECT = "pyproject.toml"
 KNOWN_KEYS = {"builder", "destinations", "version", "app_name", "secondary_suffixes",
-              "features", "variant_hints", "notes"}
+              "platforms", "features", "variant_hints", "notes", "stage"}
 
 
 def _read_toml(path: str) -> dict:
@@ -71,6 +80,25 @@ def merged(defaults: dict, overrides) -> dict:
         else:
             result[name] = value
     return result
+
+
+def platforms(config: dict) -> list:
+    """The platforms a release must have before --publish, e.g. "macos-arm64";
+    [] when unset (a single-platform app needs none)."""
+    value = config.get("platforms", [])
+    if not isinstance(value, list) or not all(isinstance(p, str) and p for p in value):
+        sys.exit(_("Configuration: platforms must be a list of platform names such as \"linux-x64\", "
+                   "not {0!r}.").format(value))
+    return value
+
+
+def archive_unix(config: dict) -> bool:
+    """Whether macOS and Linux executables are staged as .tar.gz ([stage])."""
+    value = (config.get("stage") or {}).get("archive_unix_executables", True)
+    if not isinstance(value, bool):
+        sys.exit(_("Configuration: [stage] archive_unix_executables must be true or false, not {0!r}.").format(
+            value))
+    return value
 
 
 def app_name(config: dict, products) -> str:

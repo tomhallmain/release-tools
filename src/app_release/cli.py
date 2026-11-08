@@ -1,48 +1,47 @@
 """Release an app: rebuild what is behind, stage the artifacts, tag the build's
 commit and publish.
 
-Run on the machine that builds, from any directory:
-
-    app-release [REPO] [--builder NAME] [--destination NAME ...] [--toolchain T]
-        [--bump major|minor|patch] [--variant cuda] [--products NAME ...] [--no-build]
-        [--build-info FILE] [--retag] [--force] [--notes FILE] [--no-upload]
-        [--publish] [--yes] [--yes-irreversible] [-- <build args>]
-
 REPO is the app's checkout (default: the current directory). Its
-``release.toml``, or ``[tool.release]`` in its ``pyproject.toml``, picks the
-builder, the destinations and the version's location; without either, the app
-is taken to be built by a Nuitka ``build_exe.py`` and released on GitHub.
+``release.toml`` or ``[tool.release]`` in ``pyproject.toml`` picks the builder,
+the destinations and the version's location; without either, the app is a
+Nuitka ``build_exe.py`` app released on GitHub. Run on the machine that builds.
 
-``--bump`` first raises that part of the version (1.4.2 -> 2.0.0, 1.5.0 or
-1.4.3) and commits the version file alone, once tag v<version> exists: a rerun
-before the new version is tagged keeps it. It needs a clean checkout, and the
-artifacts are then rebuilt, since they embed the version.
+1. Early checks: each destination is ready (``gh`` installed and logged in;
+   skipped with ``--no-upload``), and the checkout is not behind its upstream
+   after a fetch (``--force`` goes ahead).
+2. ``--bump`` raises that part of the version (1.4.2 -> 2.0.0, 1.5.0, 1.4.3)
+   and commits the version file, once tag v<version> exists. It needs a clean
+   checkout, and refuses while that version's release is a draft other
+   platforms may still be adding to, unless ``--force``.
+3. Rebuild the artifacts behind HEAD, adding the arguments after ``--`` and the
+   option of each feature the last build had (Nuitka: ``--with-oqs``). Nothing
+   is built with uncommitted changes or a missing prerequisite (the builder's
+   ``requires``; Nuitka: a C compiler). ``--no-build`` skips this step;
+   ``--build-info FILE`` first restores the record the artifacts were built with.
+4. Check the build: version, commit or same files, no uncommitted changes,
+   artifacts newer than the build, asset sizes, and tag v<version> on the
+   build's commit both here and on ``--remote``. The remote's tag counts: a
+   missing or stale local tag is moved to match it, and an unreachable remote
+   stops a run that uploads. ``--force`` packages despite failed checks.
+5. Stage each artifact as ``<Product>-<version>[-<os>-<arch>][-<variant>]<ext>``,
+   with the lock files, a SHA256SUMS file per platform and release notes
+   (``--notes FILE`` gives your own). Edits to the generated notes file are
+   kept across reruns. ``--no-upload`` stops here and prints the commands.
+6. Tag the build's commit, push the branch when the remote lacks the commit,
+   push the tag, and publish. A GitHub release that exists already gets this
+   run's assets and its part of the notes merged in. ``--retag`` moves a tag
+   on another commit; ``--publish`` publishes a GitHub draft once every
+   configured ``platforms`` entry is in it, built from the tag's commit.
 
-First it rebuilds the artifacts that are behind the checkout's HEAD, with the
-arguments after ``--`` added to each build command (e.g. ``-- --jobs=4``), plus
-the option of each feature the last build had (Nuitka: ``--with-oqs``). It
-builds nothing while tracked files have uncommitted changes. ``--no-build``
-skips this step; ``--build-info FILE`` first puts back the build record the
-artifacts were built with.
+Notes about to be created or changed are shown to approve, edit in $EDITOR
+(Notepad on Windows when unset) or abort; then it asks once to run the
+commands. ``--yes`` skips both prompts. Steps that cannot be undone (publishing
+to a package registry, deleting old releases' downloads) ask again, unless
+``--yes-irreversible``. Steps already done are skipped, so a rerun resumes.
 
-Then it checks the build against the checkout (version, commit or same files,
-no uncommitted changes, artifacts not older than the build, an existing tag on
-the build's commit, asset sizes); ``--force`` packages despite failed checks.
-It stages each artifact as ``<Product>-<version>[-<os>-<arch>][-<variant>]<ext>``
-with the lock files, a SHA256SUMS file per platform and release notes, unless
-``--notes`` names a file to use. A rerun regenerates the notes only while the
-file is as last generated, so edits to it are kept.
-
-Last, it tags the build's commit v<version>, pushes the current branch to
-``--remote`` when the remote's copy of it lacks that commit, pushes the tag, and
-publishes to each destination. Before a release that reads the notes is
-created, it shows them to approve, edit in $EDITOR (Notepad on Windows when
-unset) or abort, then asks once to run the commands; ``--yes`` skips both
-prompts. Steps that cannot be undone (publishing to a package registry,
-deleting old releases' downloads) ask again, unless ``--yes-irreversible``. Steps already done are skipped, so a
-rerun resumes; ``--retag`` moves an existing tag to the build's commit, and
-``--publish`` publishes a GitHub draft. ``--no-upload`` stops after staging and
-prints the commands.
+``--status`` only reports: the tag here and on ``--remote``, and each
+destination's release (draft or not, platforms present and missing, the commit
+of each notes part).
 
 Each step is timed. The log, with the output of the build and of the
 publishing commands, goes to the console and to a file per run in the app's
@@ -92,6 +91,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--notes", help=_("release notes file to use instead of the generated one"))
     parser.add_argument("--no-upload", action="store_true", help=_("stage the assets and print the commands only"))
     parser.add_argument("--publish", action="store_true", help=_("publish the release instead of leaving a draft"))
+    parser.add_argument("--status", action="store_true",
+                        help=_("report the tag and the release of the checkout's version, and change nothing"))
     parser.add_argument("--remote", default="origin", help=_("git remote to push the tag to (default: origin)"))
     parser.add_argument("--yes", action="store_true", help=_("approve the release notes and upload without asking first"))
     parser.add_argument("--yes-irreversible", action="store_true",
@@ -123,6 +124,65 @@ def _destinations(repo, config, opts) -> list:
         sys.exit(_("Configuration: destination {0!r} is not one of {1}.").format(
             unknown[0], ", ".join(sorted(DESTINATIONS))))
     return [DESTINATIONS[n](repo, config) for n in names]
+
+
+def _status(repo, tag, remote, destinations, platforms) -> None:
+    """Print where tag *tag* is and what each destination holds for it; runs
+    only git and gh commands that read."""
+    local = vcs.tagged_commit(repo, tag)
+    on_remote = vcs.remote_tagged_commit(repo, tag, remote)
+    here = _("at {0}").format(local[:10]) if local else _("absent")
+    there = (_("unknown (cannot reach it)") if on_remote is None
+             else _("at {0}").format(on_remote[:10]) if on_remote else _("absent"))
+    print(_("Tag {0}: here {1}; on {2} {3}.").format(tag, here, remote, there))
+    if local and on_remote and local != on_remote:
+        print("  " + _("The tags differ: {0}'s is the one that counts; fetch it ({1}).").format(
+            remote, f"git fetch {remote} --tags --force"))
+    if platforms:
+        print(_("Configured platforms: {0}.").format(", ".join(platforms)))
+    for destination in destinations:
+        for line in destination.status_lines(tag, platforms):
+            print(line)
+
+
+def _check_up_to_date(repo, opts) -> None:
+    """Exit when the branch's upstream has commits the checkout lacks, such as
+    a version bump pushed from another machine."""
+    upstream = vcs.upstream(repo)
+    if not upstream:
+        logger.info(_("The checkout's branch has no upstream; not checking that it is up to date."))
+        return
+    behind = vcs.commits_behind_upstream(repo)
+    if behind is None:
+        if not opts.no_upload:
+            sys.exit(_("Cannot fetch {0} to check that the checkout is up to date.").format(upstream))
+        logger.warning(_("Cannot fetch {0}: not checking that the checkout is up to date.").format(upstream))
+    elif behind:
+        if not opts.force:
+            sys.exit(_("{0} has {1} commit(s) this checkout lacks; pull first. (--force goes ahead without "
+                       "them.)").format(upstream, behind))
+        logger.warning(_("{0} has {1} commit(s) this checkout lacks; pull first. Going ahead without them "
+                         "(--force).").format(upstream, behind))
+
+
+def _check_no_draft(tag, destinations, opts) -> None:
+    """Exit when --bump would start a new version while release *tag* is a
+    draft that other platforms may still be adding to."""
+    for destination in destinations:
+        draft = destination.draft_in_progress(tag)
+        if draft is None:
+            if not opts.no_upload:
+                sys.exit(_("Cannot tell whether {0} is a draft release on {1}; not bumping.").format(
+                    tag, destination.name))
+            logger.warning(_("Cannot tell whether {0} is a draft release on {1}; bumping anyway "
+                             "(--no-upload).").format(tag, destination.name))
+        elif draft:
+            if not opts.force:
+                sys.exit(_("{0} is a draft release in progress on {1}; build it on the remaining platforms, "
+                           "or publish it, before bumping (--force bumps anyway).").format(tag, destination.name))
+            logger.warning(_("{0} is a draft release in progress on {1}; build it on the remaining platforms, "
+                             "or publish it, before bumping; bumping anyway (--force).").format(
+                tag, destination.name))
 
 
 def _confirm(question: str) -> bool:
@@ -163,6 +223,10 @@ def main(argv=None) -> None:
 
     version_source = version_from_config(repo, config.get("version")) or builder.default_version_source()
     version = version_source.read()
+    platforms = configuration.platforms(config)
+    if opts.status:
+        _status(repo, f"v{version}", opts.remote, destinations, platforms)
+        return
     artifacts = builder.artifacts()
     if opts.products:
         missing = [p for p in opts.products if p not in {a.product for a in artifacts}]
@@ -173,11 +237,23 @@ def main(argv=None) -> None:
         sys.exit(_("No artifacts found for builder {0}; build first.").format(builder.name))
     if opts.notes and not os.path.isfile(opts.notes):
         sys.exit(_("--notes: {0} not found.").format(opts.notes))
+    if not opts.no_upload:
+        # Also checked before publishing; this saves a long build that could not be uploaded.
+        for destination in destinations:
+            destination.check_ready()
+    _check_up_to_date(repo, opts)
 
+    if opts.bump and vcs.tagged_commit(repo, f"v{version}"):
+        _check_no_draft(f"v{version}", destinations, opts)
     if opts.bump:
         version = bump(repo, version_source, version, opts.bump, opts.no_build)
     tag = f"v{version}"
     log.name_after(version)
+    remote_tag = vcs.remote_tagged_commit(repo, tag, opts.remote)
+    if remote_tag is None:
+        if not opts.no_upload:
+            sys.exit(_("Cannot reach the git remote {0} to check tag {1} there.").format(opts.remote, tag))
+        logger.warning(_("Cannot reach the git remote {0}: not checking tag {1} there.").format(opts.remote, tag))
 
     app_name = configuration.app_name(config, [a.product for a in artifacts])
     builder.app_config = {**config, "app_name": app_name}
@@ -191,7 +267,8 @@ def main(argv=None) -> None:
     record = builder.read_record()
     limits = [d.max_asset_bytes for d in destinations if d.max_asset_bytes]
     errors, warnings = pipeline.check(repo, version, tag, record, artifacts, opts.variant, variant_hints,
-                                      min(limits) if limits else None, opts.retag, opts.no_build)
+                                      min(limits) if limits else None, opts.retag, opts.no_build,
+                                      remote_tag, opts.remote)
     for message in warnings:
         logger.warning(message)
     for message in errors:
@@ -206,7 +283,11 @@ def main(argv=None) -> None:
     log.keep_copy_in(out_dir)
     with timed(_("Staging the assets in {0}").format(out_dir)):
         downloads, sums = pipeline.stage(out_dir, app_name, version, opts.variant, artifacts,
-                                         builder.lock_files())
+                                         builder.lock_files(), configuration.archive_unix(config))
+    for message in pipeline.staged_too_large(downloads, min(limits) if limits else None):
+        if not opts.no_upload:
+            sys.exit(message)
+        logger.warning(message)
     title = f"{app_name} {version}"
     notes = os.path.abspath(opts.notes) if opts.notes else os.path.join(out_dir, "RELEASE_NOTES.md")
     if not opts.notes:
@@ -219,7 +300,8 @@ def main(argv=None) -> None:
     release = ReleasePlan(repo=repo, tag=tag, commit=commit, remote=opts.remote, title=title,
                           assets=downloads + sums,
                           notes=os.path.relpath(notes, repo).replace(os.sep, "/"),
-                          publish=opts.publish, retag=opts.retag)
+                          publish=opts.publish, retag=opts.retag, remote_tag=remote_tag,
+                          platforms=platforms, force=opts.force, merge_notes=not opts.notes)
     if opts.no_upload:
         if opts.retag:
             print("\n" + _("To publish, from {0}, tag {1} as {2} (git tag -f, and git push --force for the "
@@ -238,7 +320,8 @@ def main(argv=None) -> None:
         return
     confirm = not opts.yes and sys.stdin.isatty()
     if confirm and not opts.notes and reads_notes:
-        pipeline.approve_notes(notes)
+        for path in dict.fromkeys(step[step.index("--notes-file") + 1] for step in steps if "--notes-file" in step):
+            pipeline.approve_notes(os.path.join(repo, path))
     print("\n" + _("In {0}:").format(repo))
     for step in steps:
         print("  " + command_line(step))
