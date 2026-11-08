@@ -1,0 +1,660 @@
+# Translations template for APPLICATION.
+# Copyright (C) 2026 AUTHOR NAME <author@example.com>
+# This file is distributed under the same license as the APPLICATION project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: APPLICATION 1.0\n"
+"Report-Msgid-Bugs-To: Translator Name <translator@example.com>\n"
+"POT-Creation-Date: 2026-11-08 00:29-0500\n"
+"PO-Revision-Date: 2026-11-08 00:29-0500\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: src/app_release/cli.py:71
+msgid "Release an app: rebuild what is behind, stage the artifacts, tag the build's commit and publish."
+msgstr ""
+
+#: src/app_release/cli.py:73
+msgid "the app's checkout (default: the current directory)"
+msgstr ""
+
+#: src/app_release/cli.py:76
+msgid "build system, instead of the configured one (default: nuitka)"
+msgstr ""
+
+#: src/app_release/cli.py:78
+msgid "where to publish, instead of the configured ones (default: github); repeatable"
+msgstr ""
+
+#: src/app_release/cli.py:80
+msgid "what runs the build: the Python interpreter (nuitka), a rustup toolchain (cargo)"
+msgstr ""
+
+#: src/app_release/cli.py:83
+msgid "raise this part of the version and commit it once the current one is tagged"
+msgstr ""
+
+#: src/app_release/cli.py:84
+msgid "suffix for a build variant, e.g. cuda"
+msgstr ""
+
+#: src/app_release/cli.py:85
+msgid "package only these products (names without extension)"
+msgstr ""
+
+#: src/app_release/cli.py:86
+msgid "package the artifacts as they are, without rebuilding"
+msgstr ""
+
+#: src/app_release/cli.py:88
+msgid "the build record the artifacts were built with, to put back in place"
+msgstr ""
+
+#: src/app_release/cli.py:90
+msgid "move tag v<version> to the build's commit when it points elsewhere"
+msgstr ""
+
+#: src/app_release/cli.py:91
+msgid "package even when checks fail"
+msgstr ""
+
+#: src/app_release/cli.py:92
+msgid "release notes file to use instead of the generated one"
+msgstr ""
+
+#: src/app_release/cli.py:93
+msgid "stage the assets and print the commands only"
+msgstr ""
+
+#: src/app_release/cli.py:94
+msgid "publish the release instead of leaving a draft"
+msgstr ""
+
+#: src/app_release/cli.py:95
+msgid "git remote to push the tag to (default: origin)"
+msgstr ""
+
+#: src/app_release/cli.py:96
+msgid "approve the release notes and upload without asking first"
+msgstr ""
+
+#: src/app_release/cli.py:98
+msgid "also run the steps that cannot be undone without asking"
+msgstr ""
+
+#: src/app_release/cli.py:107
+msgid "Configuration: builder {0!r} is not one of {1}."
+msgstr ""
+
+#: src/app_release/cli.py:112
+msgid "{0} has no {1}, which builder {2!r} needs."
+msgstr ""
+
+#: src/app_release/cli.py:114
+msgid "It looks like a {0} project: set builder = \"{0}\"."
+msgstr ""
+
+#: src/app_release/cli.py:123
+msgid "Configuration: destination {0!r} is not one of {1}."
+msgstr ""
+
+#: src/app_release/cli.py:130
+msgid "yes"
+msgstr ""
+
+#: src/app_release/cli.py:131
+msgid "{0} [y/N] "
+msgstr ""
+
+#: src/app_release/cli.py:147
+msgid "{0} is not a folder."
+msgstr ""
+
+#: src/app_release/cli.py:154
+msgid "app-release {0} on {1}: builder {2}, destinations {3}, configured in {4}"
+msgstr ""
+
+#: src/app_release/cli.py:157
+msgid "app-release {0} on {1}: builder {2}, destinations {3}, default configuration"
+msgstr ""
+
+#: src/app_release/cli.py:160
+msgid "Configuration: {0!r} is not a setting this version reads; a typo?"
+msgstr ""
+
+#: src/app_release/cli.py:170
+msgid "No artifact for: {0}"
+msgstr ""
+
+#: src/app_release/cli.py:173
+msgid "No artifacts found for builder {0}; build first."
+msgstr ""
+
+#: src/app_release/cli.py:175
+msgid "--notes: {0} not found."
+msgstr ""
+
+#: src/app_release/cli.py:200
+msgid "Nothing packaged; fix the errors above or pass --force."
+msgstr ""
+
+#: src/app_release/cli.py:203
+msgid "Cannot tell which commit the build is from."
+msgstr ""
+
+#: src/app_release/cli.py:207
+msgid "Staging the assets in {0}"
+msgstr ""
+
+#: src/app_release/cli.py:216
+msgid "Keeping the edited release notes in {0}; delete the file to regenerate them."
+msgstr ""
+
+#: src/app_release/cli.py:217 tests/test_cli.py:93
+msgid "Staged in {0}; release notes: {1}"
+msgstr ""
+
+#: src/app_release/cli.py:225
+msgid ""
+"To publish, from {0}, tag {1} as {2} (git tag -f, and git push --force for the tag), push the branch with that commit"
+" and the tag, then:"
+msgstr ""
+
+#: src/app_release/cli.py:228
+msgid "To publish, from {0}, tag {1} as {2}, push the branch with that commit and the tag, then:"
+msgstr ""
+
+#: src/app_release/cli.py:237
+msgid "{0} is already published with these assets."
+msgstr ""
+
+#: src/app_release/cli.py:242
+msgid "In {0}:"
+msgstr ""
+
+#: src/app_release/cli.py:247
+msgid "Not run: pass --yes to upload without a terminal to confirm in."
+msgstr ""
+
+#: src/app_release/cli.py:248
+msgid "Run these?"
+msgstr ""
+
+#: src/app_release/cli.py:249 src/app_release/cli.py:255 src/app_release/pipeline.py:292
+msgid "Not run."
+msgstr ""
+
+#: src/app_release/cli.py:252
+msgid "Not run: steps for {0} cannot be undone; pass --yes-irreversible to run them without a terminal."
+msgstr ""
+
+#: src/app_release/cli.py:254
+msgid "Steps for {0} cannot be undone. Go ahead?"
+msgstr ""
+
+#: src/app_release/cli.py:259
+msgid "Stopped: the command above failed. Running this again resumes from there."
+msgstr ""
+
+#: src/app_release/cli.py:261
+msgid "Published {0}."
+msgstr ""
+
+#: src/app_release/cli.py:263
+msgid "{0} is a draft release; publish it on GitHub, or run this again with --publish."
+msgstr ""
+
+#: src/app_release/cli.py:268
+msgid ""
+"nuitka-release is now app-release: run app-release with the same arguments (app-release --memory-wait-plugin for the "
+"plugin's path)."
+msgstr ""
+
+#: src/app_release/cli.py:282
+msgid "Stopped after {0}"
+msgstr ""
+
+#: src/app_release/cli.py:286
+msgid "Interrupted after {0}"
+msgstr ""
+
+#: src/app_release/cli.py:289
+msgid "Failed after {0}"
+msgstr ""
+
+#: src/app_release/cli.py:291
+msgid "Done in {0}"
+msgstr ""
+
+#: src/app_release/config.py:40
+msgid "Cannot read {0}: {1}"
+msgstr ""
+
+#: src/app_release/config.py:52
+msgid "Both {0} and [tool.release] in {1} configure the release; keep one."
+msgstr ""
+
+#: src/app_release/log.py:144
+msgid "Deleted the old run log {0}"
+msgstr ""
+
+#: src/app_release/log.py:166 tests/test_log_and_platforms.py:61
+msgid "Log: {0}"
+msgstr ""
+
+#: src/app_release/log.py:175
+msgid "Could not copy the log into {0}: {1}"
+msgstr ""
+
+#: src/app_release/log.py:205
+msgid "Could not delete the old run log {0}: {1}"
+msgstr ""
+
+#: src/app_release/log.py:253 tests/test_log_and_platforms.py:113
+msgid "{0}h {1:02d}m {2:02d}s"
+msgstr ""
+
+#: src/app_release/log.py:255 tests/test_log_and_platforms.py:114
+msgid "{0}m {1:02d}s"
+msgstr ""
+
+#: src/app_release/log.py:256 tests/test_log_and_platforms.py:115
+msgid "{0}s"
+msgstr ""
+
+#: src/app_release/log.py:263 tests/test_log_and_platforms.py:17
+msgid "{0}..."
+msgstr ""
+
+#: src/app_release/log.py:267 tests/test_log_and_platforms.py:27
+msgid "{0} failed after {1}"
+msgstr ""
+
+#: src/app_release/log.py:269 tests/test_log_and_platforms.py:18
+msgid "{0} done in {1}"
+msgstr ""
+
+#: src/app_release/pipeline.py:26
+msgid "it is older than the checkout's last commit"
+msgstr ""
+
+#: src/app_release/pipeline.py:29
+msgid "it predates the last build, so its source is unknown"
+msgstr ""
+
+#: src/app_release/pipeline.py:33
+msgid "it was built from {0}, the checkout is at {1}"
+msgstr ""
+
+#: src/app_release/pipeline.py:34
+msgid "an unknown commit"
+msgstr ""
+
+#: src/app_release/pipeline.py:37 tests/test_pipeline.py:109
+msgid ""
+"it was built from {0}, which has the checkout's files but is not in its history (rewritten since), so it cannot be "
+"tagged"
+msgstr ""
+
+#: src/app_release/pipeline.py:40
+msgid "it was built with uncommitted changes"
+msgstr ""
+
+#: src/app_release/pipeline.py:42
+msgid "it is version {0}, the checkout says {1}"
+msgstr ""
+
+#: src/app_release/pipeline.py:70
+msgid "git cannot tell which commit the checkout is at; build yourself and pass --no-build."
+msgstr ""
+
+#: src/app_release/pipeline.py:75
+msgid "{0} is behind: {1}."
+msgstr ""
+
+#: src/app_release/pipeline.py:78
+msgid "Every artifact was built from {0} or a commit with its files; nothing to rebuild."
+msgstr ""
+
+#: src/app_release/pipeline.py:81
+msgid "Tracked files have uncommitted changes; commit or stash them, so the build matches a commit, and run this again."
+msgstr ""
+
+#: src/app_release/pipeline.py:95
+msgid "Version {0!r} is not up to four dot-separated numbers."
+msgstr ""
+
+#: src/app_release/pipeline.py:99
+msgid "No build record: cannot check what the artifacts were built from."
+msgstr ""
+
+#: src/app_release/pipeline.py:103
+msgid "The build is version {0}, the checkout says {1}."
+msgstr ""
+
+#: src/app_release/pipeline.py:105
+msgid "The build was made with uncommitted changes; commit them and rebuild."
+msgstr ""
+
+#: src/app_release/pipeline.py:107
+msgid "The build could not tell whether it had uncommitted changes."
+msgstr ""
+
+#: src/app_release/pipeline.py:110
+msgid "The build is from commit {0}, the checkout is at {1}."
+msgstr ""
+
+#: src/app_release/pipeline.py:113
+msgid "Packaging it as it is (--no-build)."
+msgstr ""
+
+#: src/app_release/pipeline.py:117 tests/test_pipeline.py:163
+msgid ""
+"The build is from commit {0}, which has the checkout's files but is not in its history (rewritten since the build), "
+"so it cannot be tagged; rebuild it."
+msgstr ""
+
+#: src/app_release/pipeline.py:121
+msgid ""
+"The build embeds the text of its checkout path, {0} (not the folder's contents), where anyone who downloads it can "
+"read it."
+msgstr ""
+
+#: src/app_release/pipeline.py:126
+msgid "{0} {1} is a {2} build; consider --variant {2}."
+msgstr ""
+
+#: src/app_release/pipeline.py:130
+msgid "{0} predates the last build; rebuild it, or leave it out with --products."
+msgstr ""
+
+#: src/app_release/pipeline.py:136
+msgid "Tag {0} points at {1}; --retag moves it to {2}."
+msgstr ""
+
+#: src/app_release/pipeline.py:138
+msgid "Tag {0} points at {1}, not the build's commit {2}; --retag moves it."
+msgstr ""
+
+#: src/app_release/pipeline.py:143 tests/test_pipeline.py:220
+msgid "{0} is {1:.0f} GiB or larger, more than a destination accepts as an asset."
+msgstr ""
+
+#: src/app_release/pipeline.py:173
+msgid "Two artifacts would both be staged as {0}; give them distinct product names."
+msgstr ""
+
+#: src/app_release/pipeline.py:181
+msgid "Staging {0} -> {1}"
+msgstr ""
+
+#: src/app_release/pipeline.py:274
+msgid "Cannot start the editor {0!r}: {1}"
+msgstr ""
+
+#: src/app_release/pipeline.py:277
+msgid "The editor {0!r} exited with code {1}."
+msgstr ""
+
+#: src/app_release/pipeline.py:287
+msgid "approve"
+msgstr ""
+
+#: src/app_release/pipeline.py:287
+msgid "edit"
+msgstr ""
+
+#: src/app_release/pipeline.py:288
+msgid "Release notes: [a]pprove, [e]dit, or abort? [a/e/N] "
+msgstr ""
+
+#: src/app_release/pipeline.py:293
+msgid ""
+"Waiting for the editor to close (an editor that returns at once, such as `code`, needs its wait option, e.g. "
+"EDITOR=\"code --wait\")."
+msgstr ""
+
+#: src/app_release/record.py:34 tests/test_record.py:48
+msgid "{0} has build record schema {1!r}; app-release {2} reads up to {3}. Update app-release."
+msgstr ""
+
+#: src/app_release/record.py:70
+msgid "--build-info: cannot read {0}: {1}"
+msgstr ""
+
+#: src/app_release/record.py:73
+msgid "--build-info: {0} names no version and commit; is it a build record?"
+msgstr ""
+
+#: src/app_release/record.py:79
+msgid "Restored {0} from {1}: version {2}, build {3}, commit {4}."
+msgstr ""
+
+#: src/app_release/record.py:114
+msgid "Wrote the build record {0}."
+msgstr ""
+
+#: src/app_release/vcs.py:56
+msgid "Cannot reach the git remote {0}."
+msgstr ""
+
+#: src/app_release/vcs.py:66
+msgid "HEAD is not on a branch; push the branch with {0} to {1} yourself."
+msgstr ""
+
+#: src/app_release/versions.py:52
+msgid "No version found: {0} does not exist."
+msgstr ""
+
+#: src/app_release/versions.py:75
+msgid "Version pattern {0!r} must have exactly one group, the version."
+msgstr ""
+
+#: src/app_release/versions.py:80
+msgid "No version found in {0} by {1!r}."
+msgstr ""
+
+#: src/app_release/versions.py:134
+msgid "No version found: {0} has no {1}."
+msgstr ""
+
+#: src/app_release/versions.py:137
+msgid "{0}: {1} is not a string."
+msgstr ""
+
+#: src/app_release/versions.py:153
+msgid "Cannot find the line of {0} in {1} to change; set the version yourself."
+msgstr ""
+
+#: src/app_release/versions.py:163
+msgid "JSON version key {0!r}: only a top-level key is supported."
+msgstr ""
+
+#: src/app_release/versions.py:171
+msgid "No version found: {0} has no string {1!r}."
+msgstr ""
+
+#: src/app_release/versions.py:194
+msgid "Configuration: cannot read version = {0!r}; give a file, or one of pattern, toml or json (see the README)."
+msgstr ""
+
+#: src/app_release/versions.py:212
+msgid "Version {0!r} is not up to four dot-separated numbers; cannot bump it."
+msgstr ""
+
+#: src/app_release/versions.py:214
+msgid "git cannot tell which commit the checkout is at; cannot bump the version."
+msgstr ""
+
+#: src/app_release/versions.py:216
+msgid "Tag {0} does not exist yet; keeping version {1}."
+msgstr ""
+
+#: src/app_release/versions.py:220
+msgid "--bump to {0} needs a rebuild, since the build embeds the version; leave out --no-build."
+msgstr ""
+
+#: src/app_release/versions.py:223
+msgid "Tracked files have uncommitted changes; commit or stash them before --bump."
+msgstr ""
+
+#: src/app_release/versions.py:225
+msgid "Tag {0} exists already; set the version yourself."
+msgstr ""
+
+#: src/app_release/versions.py:229
+msgid "git commit of {0} failed; the version stays {1}."
+msgstr ""
+
+#: src/app_release/versions.py:230
+msgid "Version {0} -> {1}, committed as {2}."
+msgstr ""
+
+#: src/app_release/builders/base.py:63
+msgid "{0} project files"
+msgstr ""
+
+#: src/app_release/builders/base.py:109
+msgid "Building: {0}"
+msgstr ""
+
+#: src/app_release/builders/base.py:111
+msgid "The build failed; nothing packaged."
+msgstr ""
+
+#: src/app_release/builders/cargo.py:34
+msgid "(cargo) build for this target instead of the configured ones; repeatable"
+msgstr ""
+
+#: src/app_release/builders/cargo.py:53
+msgid "{0} names no binary; set bins in [cargo]."
+msgstr ""
+
+#: src/app_release/builders/cargo.py:64 src/app_release/builders/nuitka.py:68
+msgid "{0} at its root"
+msgstr ""
+
+#: src/app_release/builders/command.py:37
+msgid "Configuration: [command] build must be a command ([\"make\", \"dist\"]) or a list of them."
+msgstr ""
+
+#: src/app_release/builders/command.py:45
+msgid "[command] table with build commands in its configuration"
+msgstr ""
+
+#: src/app_release/builders/command.py:50
+msgid "Configuration: [command] artifacts names no files; add e.g. {0}."
+msgstr ""
+
+#: src/app_release/builders/command.py:58
+msgid "Configuration: artifact kind {0!r} is not one of {1}."
+msgstr ""
+
+#: src/app_release/builders/command.py:76
+msgid "--toolchain has no meaning for builder = \"command\"; put it in the build command."
+msgstr ""
+
+#: src/app_release/builders/nuitka.py:41
+msgid "print the path of the Nuitka memory-wait plugin and exit (for a build_exe.py run directly)"
+msgstr ""
+
+#: src/app_release/builders/nuitka.py:121
+msgid "Cannot tell how {0} builds {1}; build it yourself, or leave it out with --products."
+msgstr ""
+
+#: src/app_release/builders/nuitka.py:131
+msgid "{0} has no option that builds {1}; build it yourself, or leave it out with --products."
+msgstr ""
+
+#: src/app_release/builders/nuitka.py:134
+msgid "Building with {0} ({1})."
+msgstr ""
+
+#: src/app_release/builders/toolchains.py:52
+msgid "{0}: cannot read a Python version from {1!r}."
+msgstr ""
+
+#: src/app_release/builders/toolchains.py:85
+msgid "--toolchain: {0} does not run."
+msgstr ""
+
+#: src/app_release/builders/toolchains.py:86
+msgid "--toolchain, Python {0}"
+msgstr ""
+
+#: src/app_release/builders/toolchains.py:92
+msgid "{0} does not run; delete {1} or pass --toolchain."
+msgstr ""
+
+#: src/app_release/builders/toolchains.py:94
+msgid "{0} has Python {1}, {2} says {3}; the build reuses {0}. Delete it to build with {3}."
+msgstr ""
+
+#: src/app_release/builders/toolchains.py:96
+msgid "the app's {0}, Python {1}"
+msgstr ""
+
+#: src/app_release/builders/toolchains.py:99 tests/test_toolchains.py:90
+msgid "the last build"
+msgstr ""
+
+#: src/app_release/builders/toolchains.py:104
+msgid "{0} asks for Python {1}, which is not installed here; install it or pass --toolchain."
+msgstr ""
+
+#: src/app_release/builders/toolchains.py:106 tests/test_toolchains.py:90
+msgid "Python {0}, from {1}"
+msgstr ""
+
+#: src/app_release/builders/toolchains.py:108
+msgid ""
+"Cannot tell which Python to build with: the app has no {0}, no {1} and no earlier build. Add a {1} (e.g. 3.11) or "
+"pass --toolchain."
+msgstr ""
+
+#: src/app_release/destinations/github.py:44
+msgid "gh (GitHub CLI) is not installed; install it, run `gh auth login`, or pass --no-upload."
+msgstr ""
+
+#: src/app_release/destinations/github.py:48
+msgid "gh is not logged in to GitHub; run `gh auth login` (or set GH_TOKEN) and run this again."
+msgstr ""
+
+#: src/app_release/destinations/github.py:63
+msgid "Configuration: [github] keep must be a whole number of releases, not {0!r}."
+msgstr ""
+
+#: src/app_release/destinations/github.py:91
+msgid "Cannot list the GitHub releases to prune: {0}"
+msgstr ""
+
+#: src/app_release/destinations/github.py:103
+msgid "Not pruning {0}: it is an immutable release, whose assets cannot be deleted."
+msgstr ""
+
+#: src/app_release/destinations/github.py:112
+msgid "GitHub: create the draft release with"
+msgstr ""
+
+#: src/app_release/destinations/github.py:114
+msgid "or, for a release that exists already,"
+msgstr ""
+
+#: src/app_release/destinations/github.py:118
+msgid "With --publish, also delete the downloads of releases older than the newest {0}."
+msgstr ""
+
+#: src/app_release/destinations/none.py:14
+msgid "{0}: nothing to publish beyond the tag."
+msgstr ""
+
+#: src/app_release/lib/translations.py:44
+msgid "Switched locale to: {0}"
+msgstr ""
+

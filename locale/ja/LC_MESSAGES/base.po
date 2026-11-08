@@ -1,0 +1,735 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: 1.0\n"
+"POT-Creation-Date: 2026-11-08 00:43-0500\n"
+"PO-Revision-Date: 2026-11-08 00:43-0500\n"
+"Last-Translator: Translator Name <translator@example.com>\n"
+"Language-Team: ja Team <<EMAIL>>\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/app_release/cli.py:71
+msgid ""
+"Release an app: rebuild what is behind, stage the artifacts, tag the build's"
+" commit and publish."
+msgstr "アプリをリリースする：バックエンドを再ビルドし、アーティファクトをステージングし、ビルドのコミットにタグ付けして公開する。"
+
+#: src/app_release/cli.py:73
+msgid "the app's checkout (default: the current directory)"
+msgstr "アプリのチェックアウト（デフォルト：現在のディレクトリ）"
+
+#: src/app_release/cli.py:76
+msgid "build system, instead of the configured one (default: nuitka)"
+msgstr "ビルドシステム、設定されているものの代わりに（デフォルト: nuitka）"
+
+#: src/app_release/cli.py:78
+msgid ""
+"where to publish, instead of the configured ones (default: github); "
+"repeatable"
+msgstr "公開先（設定されたものの代わり、デフォルト：github）。繰り返し可能"
+
+#: src/app_release/cli.py:80
+msgid ""
+"what runs the build: the Python interpreter (nuitka), a rustup toolchain "
+"(cargo)"
+msgstr "ビルドを実行するもの：Python インタプリタ (nuitka)、rustup ツールチェーン (cargo)"
+
+#: src/app_release/cli.py:83
+msgid ""
+"raise this part of the version and commit it once the current one is tagged"
+msgstr "このバージョンの該当部分を上げ、現在のものがタグ付けされたらコミットしてください"
+
+#: src/app_release/cli.py:84
+msgid "suffix for a build variant, e.g. cuda"
+msgstr "ビルドバリアントのサフィックス、例：cuda"
+
+#: src/app_release/cli.py:85
+msgid "package only these products (names without extension)"
+msgstr "これらの製品のみをパッケージ化（拡張子なしの名前）"
+
+#: src/app_release/cli.py:86
+msgid "package the artifacts as they are, without rebuilding"
+msgstr "アーティファクトをそのままパッケージ化し、再ビルドしないでください"
+
+#: src/app_release/cli.py:88
+msgid "the build record the artifacts were built with, to put back in place"
+msgstr "アーティファクトがビルドされたビルドレコード、元に戻すために"
+
+#: src/app_release/cli.py:90
+msgid "move tag v<version> to the build's commit when it points elsewhere"
+msgstr "タグ v<version> を、別の場所を指している場合はビルドのコミットへ移動する"
+
+#: src/app_release/cli.py:91
+msgid "package even when checks fail"
+msgstr "チェックが失敗してもパッケージ"
+
+#: src/app_release/cli.py:92
+msgid "release notes file to use instead of the generated one"
+msgstr "生成されたものの代わりに使用するリリースノートファイル"
+
+#: src/app_release/cli.py:93
+msgid "stage the assets and print the commands only"
+msgstr "アセットをステージングし、コマンドだけを出力する"
+
+#: src/app_release/cli.py:94
+msgid "publish the release instead of leaving a draft"
+msgstr "ドラフトのままにせずリリースを公開する"
+
+#: src/app_release/cli.py:95
+msgid "git remote to push the tag to (default: origin)"
+msgstr "タグをプッシュするgitリモート（デフォルト: origin）"
+
+#: src/app_release/cli.py:96
+msgid "approve the release notes and upload without asking first"
+msgstr "リリースノートを承認し、事前に確認せずにアップロードする"
+
+#: src/app_release/cli.py:98
+msgid "also run the steps that cannot be undone without asking"
+msgstr "確認なしで取り消せない手順も実行する"
+
+#: src/app_release/cli.py:107
+msgid "Configuration: builder {0!r} is not one of {1}."
+msgstr "設定: ビルダー {0!r} は {1} のいずれでもありません。"
+
+#: src/app_release/cli.py:112
+msgid "{0} has no {1}, which builder {2!r} needs."
+msgstr "{0} に {1} がなく、ビルダー {2!r} が必要とします。"
+
+#: src/app_release/cli.py:114
+msgid "It looks like a {0} project: set builder = \"{0}\"."
+msgstr "これは{0}プロジェクトのようです: ビルダーを設定 = \"{0}\"。"
+
+#: src/app_release/cli.py:123
+msgid "Configuration: destination {0!r} is not one of {1}."
+msgstr "構成: 宛先 {0!r} は {1} のいずれでもありません。"
+
+#: src/app_release/cli.py:130
+msgid "yes"
+msgstr "はい"
+
+#: src/app_release/cli.py:131
+msgid "{0} [y/N] "
+msgstr "{0} [y/N] "
+
+#: src/app_release/cli.py:147
+msgid "{0} is not a folder."
+msgstr "{0}はフォルダーではありません。"
+
+#: src/app_release/cli.py:154
+msgid ""
+"app-release {0} on {1}: builder {2}, destinations {3}, configured in {4}"
+msgstr "app-release {0} が {1} で: builder {2}、宛先 {3}、{4} に設定"
+
+#: src/app_release/cli.py:157
+msgid ""
+"app-release {0} on {1}: builder {2}, destinations {3}, default configuration"
+msgstr "app-release {0}（{1}）: ビルダー {2}、デスティネーション {3}、デフォルト設定"
+
+#: src/app_release/cli.py:160
+msgid "Configuration: {0!r} is not a setting this version reads; a typo?"
+msgstr "構成: {0!r} はこのバージョンが読み取る設定ではありません; タイプミスですか？"
+
+#: src/app_release/cli.py:170
+msgid "No artifact for: {0}"
+msgstr "アーティファクトがありません: {0}"
+
+#: src/app_release/cli.py:173
+msgid "No artifacts found for builder {0}; build first."
+msgstr "ビルダー{0}のアーティファクトが見つかりません; まずビルドしてください。"
+
+#: src/app_release/cli.py:175
+msgid "--notes: {0} not found."
+msgstr "--ノート: {0} が見つかりません。"
+
+#: src/app_release/cli.py:200
+msgid "Nothing packaged; fix the errors above or pass --force."
+msgstr "パッケージ化されませんでした。上記のエラーを修正するか、--force を指定してください。"
+
+#: src/app_release/cli.py:203
+msgid "Cannot tell which commit the build is from."
+msgstr "ビルドがどのコミットからのものか判別できません。"
+
+#: src/app_release/cli.py:207
+msgid "Staging the assets in {0}"
+msgstr "アセットを{0}にステージング中"
+
+#: src/app_release/cli.py:216
+msgid ""
+"Keeping the edited release notes in {0}; delete the file to regenerate them."
+msgstr "編集したリリースノートは {0} に保存されています；ファイルを削除すると再生成されます。"
+
+#: src/app_release/cli.py:217 tests/test_cli.py:93
+msgid "Staged in {0}; release notes: {1}"
+msgstr "ステージング先 {0}; リリースノート: {1}"
+
+#: src/app_release/cli.py:225
+msgid ""
+"To publish, from {0}, tag {1} as {2} (git tag -f, and git push --force for "
+"the tag), push the branch with that commit and the tag, then:"
+msgstr ""
+"公開するには、{0} から {1} を {2} としてタグ付けします（git tag -f、タグには git push "
+"--force）、そのコミットとタグを含むブランチをプッシュし、次に："
+
+#: src/app_release/cli.py:228
+msgid ""
+"To publish, from {0}, tag {1} as {2}, push the branch with that commit and "
+"the tag, then:"
+msgstr "公開するには、{0} から、{1} を {2} としてタグ付けし、そのコミットとタグを含むブランチをプッシュして、次に："
+
+#: src/app_release/cli.py:237
+msgid "{0} is already published with these assets."
+msgstr "{0} はこれらのアセットですでに公開されています。"
+
+#: src/app_release/cli.py:242
+msgid "In {0}:"
+msgstr "{0}内:"
+
+#: src/app_release/cli.py:247
+msgid "Not run: pass --yes to upload without a terminal to confirm in."
+msgstr "実行されていません: --yes を渡すと、ターミナルなしで確認の上アップロードできます。"
+
+#: src/app_release/cli.py:248
+msgid "Run these?"
+msgstr "これらを実行しますか？"
+
+#: src/app_release/cli.py:249 src/app_release/cli.py:255
+#: src/app_release/pipeline.py:292
+msgid "Not run."
+msgstr "実行されていません。"
+
+#: src/app_release/cli.py:252
+msgid ""
+"Not run: steps for {0} cannot be undone; pass --yes-irreversible to run them"
+" without a terminal."
+msgstr "未実行: {0} の手順は元に戻せません; --yes-irreversible を付けて端末なしで実行してください。"
+
+#: src/app_release/cli.py:254
+msgid "Steps for {0} cannot be undone. Go ahead?"
+msgstr "「{0}」の手順は取り消せません。続行しますか？"
+
+#: src/app_release/cli.py:259
+msgid ""
+"Stopped: the command above failed. Running this again resumes from there."
+msgstr "停止しました：上のコマンドが失敗しました。再実行するとそこから再開します。"
+
+#: src/app_release/cli.py:261
+msgid "Published {0}."
+msgstr "公開 {0}。"
+
+#: src/app_release/cli.py:263
+msgid ""
+"{0} is a draft release; publish it on GitHub, or run this again with "
+"--publish."
+msgstr "{0} はドラフトリリースです。GitHub で公開するか、--publish を付けて再実行してください。"
+
+#: src/app_release/cli.py:268
+msgid ""
+"nuitka-release is now app-release: run app-release with the same arguments "
+"(app-release --memory-wait-plugin for the plugin's path)."
+msgstr ""
+"nuitka-release は現在 app-release です。app-release を同じ引数で実行してください（プラグインのパスは app-"
+"release --memory-wait-plugin）。"
+
+#: src/app_release/cli.py:282
+msgid "Stopped after {0}"
+msgstr "{0} 後に停止"
+
+#: src/app_release/cli.py:286
+msgid "Interrupted after {0}"
+msgstr "中断後 {0}"
+
+#: src/app_release/cli.py:289
+msgid "Failed after {0}"
+msgstr "失敗後 {0}"
+
+#: src/app_release/cli.py:291
+msgid "Done in {0}"
+msgstr "完了まで {0}"
+
+#: src/app_release/config.py:40
+msgid "Cannot read {0}: {1}"
+msgstr "{0} を読み取れません: {1}"
+
+#: src/app_release/config.py:52
+msgid "Both {0} and [tool.release] in {1} configure the release; keep one."
+msgstr "{0} と {1} の [tool.release] はリリースを構成します；どちらか一つだけ残してください。"
+
+#: src/app_release/log.py:144
+msgid "Deleted the old run log {0}"
+msgstr "古い実行ログ {0} を削除しました"
+
+#: src/app_release/log.py:166 tests/test_log_and_platforms.py:61
+msgid "Log: {0}"
+msgstr "ログ: {0}"
+
+#: src/app_release/log.py:175
+msgid "Could not copy the log into {0}: {1}"
+msgstr "ログを{0}にコピーできませんでした: {1}"
+
+#: src/app_release/log.py:205
+msgid "Could not delete the old run log {0}: {1}"
+msgstr "古い実行ログ {0} を削除できませんでした: {1}"
+
+#: src/app_release/log.py:253 tests/test_log_and_platforms.py:113
+msgid "{0}h {1:02d}m {2:02d}s"
+msgstr "{0}時間 {1:02d}分 {2:02d}秒"
+
+#: src/app_release/log.py:255 tests/test_log_and_platforms.py:114
+msgid "{0}m {1:02d}s"
+msgstr "{0}分 {1:02d}秒"
+
+#: src/app_release/log.py:256 tests/test_log_and_platforms.py:115
+msgid "{0}s"
+msgstr "{0}s"
+
+#: src/app_release/log.py:263 tests/test_log_and_platforms.py:17
+msgid "{0}..."
+msgstr "{0}..."
+
+#: src/app_release/log.py:267 tests/test_log_and_platforms.py:27
+msgid "{0} failed after {1}"
+msgstr "{0}は{1}後に失敗しました"
+
+#: src/app_release/log.py:269 tests/test_log_and_platforms.py:18
+msgid "{0} done in {1}"
+msgstr "{0} が {1} で完了"
+
+#: src/app_release/pipeline.py:26
+msgid "it is older than the checkout's last commit"
+msgstr "チェックアウトの最後のコミットより古いです"
+
+#: src/app_release/pipeline.py:29
+msgid "it predates the last build, so its source is unknown"
+msgstr "最後のビルドよりも前のものなので、ソースは不明です"
+
+#: src/app_release/pipeline.py:33
+msgid "it was built from {0}, the checkout is at {1}"
+msgstr "それは{0}から構築され、チェックアウトは{1}にあります"
+
+#: src/app_release/pipeline.py:34
+msgid "an unknown commit"
+msgstr "不明なコミット"
+
+#: src/app_release/pipeline.py:37 tests/test_pipeline.py:109
+msgid ""
+"it was built from {0}, which has the checkout's files but is not in its "
+"history (rewritten since), so it cannot be tagged"
+msgstr "それは {0} から構築されました。チェックアウトのファイルはありますが、履歴にはなく（以降書き換えられたため）、タグ付けできません"
+
+#: src/app_release/pipeline.py:40
+msgid "it was built with uncommitted changes"
+msgstr "未コミットの変更を含んでビルドされました"
+
+#: src/app_release/pipeline.py:42
+msgid "it is version {0}, the checkout says {1}"
+msgstr "バージョンは{0}、チェックアウトは{1}です"
+
+#: src/app_release/pipeline.py:70
+msgid ""
+"git cannot tell which commit the checkout is at; build yourself and pass "
+"--no-build."
+msgstr "git はどのコミットでチェックアウトされているか判別できません。自分でビルドし、--no-build を渡してください。"
+
+#: src/app_release/pipeline.py:75
+msgid "{0} is behind: {1}."
+msgstr "{0} が遅れています: {1}。"
+
+#: src/app_release/pipeline.py:78
+msgid ""
+"Every artifact was built from {0} or a commit with its files; nothing to "
+"rebuild."
+msgstr "すべてのアーティファクトは{0}またはそのファイルを含むコミットからビルドされました；再ビルドするものはありません。"
+
+#: src/app_release/pipeline.py:81
+msgid ""
+"Tracked files have uncommitted changes; commit or stash them, so the build "
+"matches a commit, and run this again."
+msgstr "追跡中のファイルに未コミットの変更があります。コミットまたはスタッシュしてビルドがコミットと一致するようにし、もう一度実行してください。"
+
+#: src/app_release/pipeline.py:95
+msgid "Version {0!r} is not up to four dot-separated numbers."
+msgstr "バージョン {0!r} は、4つまでのドット区切りの数字ではありません。"
+
+#: src/app_release/pipeline.py:99
+msgid "No build record: cannot check what the artifacts were built from."
+msgstr "ビルド記録なし: アーティファクトが何からビルドされたか確認できません。"
+
+#: src/app_release/pipeline.py:103
+msgid "The build is version {0}, the checkout says {1}."
+msgstr "ビルドはバージョン{0}で、チェックアウトは{1}です。"
+
+#: src/app_release/pipeline.py:105
+msgid "The build was made with uncommitted changes; commit them and rebuild."
+msgstr "ビルドは未コミットの変更を含んでいます；変更をコミットして再ビルドしてください。"
+
+#: src/app_release/pipeline.py:107
+msgid "The build could not tell whether it had uncommitted changes."
+msgstr "ビルドは、未コミットの変更があるかどうか判断できませんでした。"
+
+#: src/app_release/pipeline.py:110
+msgid "The build is from commit {0}, the checkout is at {1}."
+msgstr "ビルドはコミット {0} からで、チェックアウトは {1} にあります。"
+
+#: src/app_release/pipeline.py:113
+msgid "Packaging it as it is (--no-build)."
+msgstr "そのままパッケージ化 (--no-build)。"
+
+#: src/app_release/pipeline.py:117 tests/test_pipeline.py:163
+msgid ""
+"The build is from commit {0}, which has the checkout's files but is not in "
+"its history (rewritten since the build), so it cannot be tagged; rebuild it."
+msgstr ""
+"このビルドはコミット {0} "
+"から作成されましたが、チェックアウトされたファイルは含むものの、その履歴にはありません（ビルド以降に書き換えられたため）。そのためタグ付けできません。再ビルドしてください。"
+
+#: src/app_release/pipeline.py:121
+msgid ""
+"The build embeds the text of its checkout path, {0} (not the folder's "
+"contents), where anyone who downloads it can read it."
+msgstr "ビルドはチェックアウトパスのテキスト（{0}、フォルダーの内容ではなく）を埋め込み、ダウンロードした人は誰でもそれを読むことができます。"
+
+#: src/app_release/pipeline.py:126
+msgid "{0} {1} is a {2} build; consider --variant {2}."
+msgstr "{0} {1} は {2} ビルドです; --variant {2} を検討してください。"
+
+#: src/app_release/pipeline.py:130
+msgid ""
+"{0} predates the last build; rebuild it, or leave it out with --products."
+msgstr "{0} は最後のビルドより古いです; 再ビルドするか、--products で除外してください。"
+
+#: src/app_release/pipeline.py:136
+msgid "Tag {0} points at {1}; --retag moves it to {2}."
+msgstr "タグ{0}が{1}を指しています；--retagで{2}に移動します。"
+
+#: src/app_release/pipeline.py:138
+msgid "Tag {0} points at {1}, not the build's commit {2}; --retag moves it."
+msgstr "タグ{0}は{1}を指しており、ビルドのコミット{2}ではありません；--retagで移動します。"
+
+#: src/app_release/pipeline.py:143 tests/test_pipeline.py:220
+msgid ""
+"{0} is {1:.0f} GiB or larger, more than a destination accepts as an asset."
+msgstr "{0} は {1:.0f} GiB 以上で、宛先がアセットとして受け入れるサイズを超えています。"
+
+#: src/app_release/pipeline.py:173
+msgid ""
+"Two artifacts would both be staged as {0}; give them distinct product names."
+msgstr "2つのアーティファクトが両方とも {0} としてステージされます。別々の製品名を付けてください。"
+
+#: src/app_release/pipeline.py:181
+msgid "Staging {0} -> {1}"
+msgstr "ステージング {0} -> {1}"
+
+#: src/app_release/pipeline.py:274
+msgid "Cannot start the editor {0!r}: {1}"
+msgstr "エディター {0!r} を起動できません: {1}"
+
+#: src/app_release/pipeline.py:277
+msgid "The editor {0!r} exited with code {1}."
+msgstr "エディタ {0!r} がコード {1} で終了しました。"
+
+#: src/app_release/pipeline.py:287
+msgid "approve"
+msgstr "承認"
+
+#: src/app_release/pipeline.py:287
+msgid "edit"
+msgstr "編集"
+
+#: src/app_release/pipeline.py:288
+msgid "Release notes: [a]pprove, [e]dit, or abort? [a/e/N] "
+msgstr "リリースノート: [a]承認、[e]編集、または中止? [a/e/N] "
+
+#: src/app_release/pipeline.py:293
+msgid ""
+"Waiting for the editor to close (an editor that returns at once, such as "
+"`code`, needs its wait option, e.g. EDITOR=\"code --wait\")."
+msgstr ""
+"エディターが閉じるのを待っています（`code` のようにすぐに戻るエディターは、待機オプションが必要です。例: EDITOR=\\\"code "
+"--wait\\\"）。"
+
+#: src/app_release/record.py:34 tests/test_record.py:48
+msgid ""
+"{0} has build record schema {1!r}; app-release {2} reads up to {3}. Update "
+"app-release."
+msgstr ""
+"{0} はビルドレコードスキーマ {1!r} を持ちます；app-release {2} は {3} まで読み取ります。app-release "
+"を更新してください。"
+
+#: src/app_release/record.py:70
+msgid "--build-info: cannot read {0}: {1}"
+msgstr "--build-info: {0} を読み取れません: {1}"
+
+#: src/app_release/record.py:73
+msgid "--build-info: {0} names no version and commit; is it a build record?"
+msgstr "--build-info: {0} はバージョンとコミットを示さない；ビルドレコードですか？"
+
+#: src/app_release/record.py:79
+msgid "Restored {0} from {1}: version {2}, build {3}, commit {4}."
+msgstr "復元しました {0} を {1} から: バージョン {2}, ビルド {3}, コミット {4}。"
+
+#: src/app_release/record.py:114
+msgid "Wrote the build record {0}."
+msgstr "ビルドレコード {0} を書き込みました。"
+
+#: src/app_release/vcs.py:56
+msgid "Cannot reach the git remote {0}."
+msgstr "gitリモート {0} に接続できません。"
+
+#: src/app_release/vcs.py:66
+msgid "HEAD is not on a branch; push the branch with {0} to {1} yourself."
+msgstr "HEAD がブランチ上にありません; {0} でブランチを {1} に自分でプッシュしてください。"
+
+#: src/app_release/versions.py:52
+msgid "No version found: {0} does not exist."
+msgstr "バージョンが見つかりません: {0} は存在しません。"
+
+#: src/app_release/versions.py:75
+msgid "Version pattern {0!r} must have exactly one group, the version."
+msgstr "バージョンパターン {0!r} は、バージョンという 1 つのグループだけを持つ必要があります。"
+
+#: src/app_release/versions.py:80
+msgid "No version found in {0} by {1!r}."
+msgstr "「{0}」にバージョンが見つかりません（{1!r}）。"
+
+#: src/app_release/versions.py:134
+msgid "No version found: {0} has no {1}."
+msgstr "バージョンが見つかりません: {0} に {1} がありません。"
+
+#: src/app_release/versions.py:137
+msgid "{0}: {1} is not a string."
+msgstr "{0}: {1} は文字列ではありません。"
+
+#: src/app_release/versions.py:153
+msgid ""
+"Cannot find the line of {0} in {1} to change; set the version yourself."
+msgstr "{0} の行が {1} に見つかりません；バージョンは自分で設定してください。"
+
+#: src/app_release/versions.py:163
+msgid "JSON version key {0!r}: only a top-level key is supported."
+msgstr "JSON バージョンキー {0!r}: トップレベルのキーのみがサポートされています。"
+
+#: src/app_release/versions.py:171
+msgid "No version found: {0} has no string {1!r}."
+msgstr "バージョンが見つかりません: {0} に文字列 {1!r} がありません。"
+
+#: src/app_release/versions.py:194
+msgid ""
+"Configuration: cannot read version = {0!r}; give a file, or one of pattern, "
+"toml or json (see the README)."
+msgstr ""
+"構成: バージョン = {0!r} を読み取れません; ファイル、または pattern、toml、json のいずれかを指定してください "
+"(README を参照)。"
+
+#: src/app_release/versions.py:212
+msgid "Version {0!r} is not up to four dot-separated numbers; cannot bump it."
+msgstr "バージョン {0!r} は4つまでのドット区切りの数字ではありません；更新できません。"
+
+#: src/app_release/versions.py:214
+msgid ""
+"git cannot tell which commit the checkout is at; cannot bump the version."
+msgstr "git はどのコミットでチェックアウトされているか判別できません；バージョンを上げられません。"
+
+#: src/app_release/versions.py:216
+msgid "Tag {0} does not exist yet; keeping version {1}."
+msgstr "タグ{0}はまだ存在しません；バージョン{1}を保持します。"
+
+#: src/app_release/versions.py:220
+msgid ""
+"--bump to {0} needs a rebuild, since the build embeds the version; leave out"
+" --no-build."
+msgstr "--bump を {0} にすると、ビルドにバージョンが埋め込まれるため再ビルドが必要です；--no-build は省いてください。"
+
+#: src/app_release/versions.py:223
+msgid ""
+"Tracked files have uncommitted changes; commit or stash them before --bump."
+msgstr "トラッキングされたファイルに未コミットの変更があります。--bump の前に commit か stash を行ってください。"
+
+#: src/app_release/versions.py:225
+msgid "Tag {0} exists already; set the version yourself."
+msgstr "タグ {0} は既に存在します；バージョンは自分で設定してください。"
+
+#: src/app_release/versions.py:229
+msgid "git commit of {0} failed; the version stays {1}."
+msgstr "git commit の {0} が失敗しました; バージョンは {1} のままです。"
+
+#: src/app_release/versions.py:230
+msgid "Version {0} -> {1}, committed as {2}."
+msgstr "バージョン {0} -> {1}、{2} としてコミットされました。"
+
+#: src/app_release/builders/base.py:63
+msgid "{0} project files"
+msgstr "{0} プロジェクトファイル"
+
+#: src/app_release/builders/base.py:109
+msgid "Building: {0}"
+msgstr "建物: {0}"
+
+#: src/app_release/builders/base.py:111
+msgid "The build failed; nothing packaged."
+msgstr "ビルドに失敗しました。パッケージ化されていません。"
+
+#: src/app_release/builders/cargo.py:34
+msgid ""
+"(cargo) build for this target instead of the configured ones; repeatable"
+msgstr "(cargo) このターゲット向けにビルド（設定されたものではなく）；再利用可能"
+
+#: src/app_release/builders/cargo.py:53
+msgid "{0} names no binary; set bins in [cargo]."
+msgstr "{0} にバイナリがありません；[cargo] で bins を設定してください。"
+
+#: src/app_release/builders/cargo.py:64 src/app_release/builders/nuitka.py:68
+msgid "{0} at its root"
+msgstr "{0} のルートで"
+
+#: src/app_release/builders/command.py:37
+msgid ""
+"Configuration: [command] build must be a command ([\"make\", \"dist\"]) or a"
+" list of them."
+msgstr "設定：[command] build は、コマンド（[「make」、「dist」]）またはそれらのリストでなければなりません。"
+
+#: src/app_release/builders/command.py:45
+msgid "[command] table with build commands in its configuration"
+msgstr "[command] テーブルは構成内のビルドコマンドです"
+
+#: src/app_release/builders/command.py:50
+msgid "Configuration: [command] artifacts names no files; add e.g. {0}."
+msgstr "設定: [command] アーティファクト名 ファイルなし; 例: {0} を追加。"
+
+#: src/app_release/builders/command.py:58
+msgid "Configuration: artifact kind {0!r} is not one of {1}."
+msgstr "構成: アーティファクトの種類 {0!r} は {1} のいずれでもありません。"
+
+#: src/app_release/builders/command.py:76
+msgid ""
+"--toolchain has no meaning for builder = \"command\"; put it in the build "
+"command."
+msgstr "--toolchain は builder = \\\"command\\\" に意味がありません。ビルドコマンドに入れてください。"
+
+#: src/app_release/builders/nuitka.py:41
+msgid ""
+"print the path of the Nuitka memory-wait plugin and exit (for a build_exe.py"
+" run directly)"
+msgstr "Nuitka の memory-wait プラグインのパスを表示して終了します（build_exe.py を直接実行する場合）"
+
+#: src/app_release/builders/nuitka.py:121
+msgid ""
+"Cannot tell how {0} builds {1}; build it yourself, or leave it out with "
+"--products."
+msgstr "どのように{0}が{1}を構築するか判断できません。自分で構築するか、--productsで除外してください。"
+
+#: src/app_release/builders/nuitka.py:131
+msgid ""
+"{0} has no option that builds {1}; build it yourself, or leave it out with "
+"--products."
+msgstr "{0} には {1} をビルドするオプションがありません；自分でビルドするか、--products で除外してください。"
+
+#: src/app_release/builders/nuitka.py:134
+msgid "Building with {0} ({1})."
+msgstr "{0} ({1})で構築しています。"
+
+#: src/app_release/builders/toolchains.py:52
+msgid "{0}: cannot read a Python version from {1!r}."
+msgstr "{0}: {1!r} から Python バージョンを読み取れません。"
+
+#: src/app_release/builders/toolchains.py:85
+msgid "--toolchain: {0} does not run."
+msgstr "--toolchain: {0} が実行されません。"
+
+#: src/app_release/builders/toolchains.py:86
+msgid "--toolchain, Python {0}"
+msgstr "--ツールチェーン, Python {0}"
+
+#: src/app_release/builders/toolchains.py:92
+msgid "{0} does not run; delete {1} or pass --toolchain."
+msgstr "{0} が実行されません; {1} を削除するか、--toolchain を渡してください。"
+
+#: src/app_release/builders/toolchains.py:94
+msgid ""
+"{0} has Python {1}, {2} says {3}; the build reuses {0}. Delete it to build "
+"with {3}."
+msgstr ""
+"{0} は Python {1} を持ち、{2} は {3} と言っています；ビルドは {0} を再利用します。{3} "
+"でビルドするには削除してください。"
+
+#: src/app_release/builders/toolchains.py:96
+msgid "the app's {0}, Python {1}"
+msgstr "アプリの{0}、Python{1}"
+
+#: src/app_release/builders/toolchains.py:99 tests/test_toolchains.py:90
+msgid "the last build"
+msgstr "最後のビルド"
+
+#: src/app_release/builders/toolchains.py:104
+msgid ""
+"{0} asks for Python {1}, which is not installed here; install it or pass "
+"--toolchain."
+msgstr ""
+"{0} は Python {1} を要求していますが、ここにはインストールされていません。インストールするか、--toolchain を渡してください。"
+
+#: src/app_release/builders/toolchains.py:106 tests/test_toolchains.py:90
+msgid "Python {0}, from {1}"
+msgstr "Python {0}、{1}から"
+
+#: src/app_release/builders/toolchains.py:108
+msgid ""
+"Cannot tell which Python to build with: the app has no {0}, no {1} and no "
+"earlier build. Add a {1} (e.g. 3.11) or pass --toolchain."
+msgstr ""
+"どの Python でビルドすべきか判別できません: アプリに {0} がなく、{1} もなく、以前のビルドもありません。{1}（例: "
+"3.11）を追加するか、--toolchain を指定してください。"
+
+#: src/app_release/destinations/github.py:44
+msgid ""
+"gh (GitHub CLI) is not installed; install it, run `gh auth login`, or pass "
+"--no-upload."
+msgstr ""
+"gh（GitHub CLI）はインストールされていません; インストールするか、`gh auth login` を実行するか、--no-upload "
+"を指定してください。"
+
+#: src/app_release/destinations/github.py:48
+msgid ""
+"gh is not logged in to GitHub; run `gh auth login` (or set GH_TOKEN) and run"
+" this again."
+msgstr ""
+"gh は GitHub にログインしていません。`gh auth login` を実行するか (または GH_TOKEN "
+"を設定し)、再度実行してください。"
+
+#: src/app_release/destinations/github.py:63
+msgid ""
+"Configuration: [github] keep must be a whole number of releases, not {0!r}."
+msgstr "設定: [github] keep はリリース数の整数である必要があります、{0!r} ではありません。"
+
+#: src/app_release/destinations/github.py:91
+msgid "Cannot list the GitHub releases to prune: {0}"
+msgstr "削除対象の GitHub リリースを一覧表示できません: {0}"
+
+#: src/app_release/destinations/github.py:103
+msgid ""
+"Not pruning {0}: it is an immutable release, whose assets cannot be deleted."
+msgstr "「{0}」をプルーニングしません：これは不変のリリースで、アセットは削除できません。"
+
+#: src/app_release/destinations/github.py:112
+msgid "GitHub: create the draft release with"
+msgstr "GitHub: 下書きリリースを作成"
+
+#: src/app_release/destinations/github.py:114
+msgid "or, for a release that exists already,"
+msgstr "または、すでに存在するリリースの場合、"
+
+#: src/app_release/destinations/github.py:118
+msgid ""
+"With --publish, also delete the downloads of releases older than the newest "
+"{0}."
+msgstr "--publish を使用すると、最新の {0} より古いリリースのダウンロードも削除されます。"
+
+#: src/app_release/destinations/none.py:14
+msgid "{0}: nothing to publish beyond the tag."
+msgstr "{0}: タグの先に公開するものはありません。"
+
+#: src/app_release/lib/translations.py:44
+msgid "Switched locale to: {0}"
+msgstr "ロケールを{0}に切り替えました"
