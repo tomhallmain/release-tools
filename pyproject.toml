@@ -23,6 +23,9 @@ version = { attr = "app_release.__version__" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+app_release = ["locale/*/LC_MESSAGES/*.mo"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

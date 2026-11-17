@@ -1,13 +1,15 @@
 """The build system seam: where artifacts are, how to rebuild them, and where
 their build record is."""
 import os
+import shutil
 import subprocess
 import sys
 import time
 from abc import ABC, abstractmethod
 
 from app_release import record as records
-from app_release.log import command_line, timed
+from app_release.lib.translations import _
+from app_release.log import command_line, run_logged, timed
 
 APP = "app"     # the build writes its own record
 TOOL = "tool"   # this tool writes the record when it runs the build
@@ -42,11 +44,8 @@ class Builder(ABC):
     # Locations.
 
     def work_dir(self) -> str:
-        """Where the log, the tool-written record and staging go."""
+        """Where the tool-written record and staging go."""
         return os.path.join(self.repo, TOOL_DIR)
-
-    def log_dir(self) -> str:
-        return os.path.join(self.work_dir(), "logs")
 
     def stage_dir(self, tag: str) -> str:
         return os.path.join(self.work_dir(), "stage", tag)
@@ -62,7 +61,7 @@ class Builder(ABC):
 
     def describe(self) -> str:
         """What detect() looks for, for the message when it finds nothing."""
-        return f"{self.name} project files"
+        return _("{0} project files").format(self.name)
 
     @abstractmethod
     def artifacts(self) -> list:
@@ -90,6 +89,18 @@ class Builder(ABC):
 
     # Building.
 
+    def preflight(self) -> None:
+        """Exit, before a build starts, when this host lacks what the build
+        needs: each command in this builder's ``requires`` setting."""
+        required = self.config.get("requires", [])
+        if not isinstance(required, list) or not all(isinstance(c, str) for c in required):
+            sys.exit(_("Configuration: [{0}] requires must be a list of command names, not {1!r}.").format(
+                self.name, required))
+        missing = [command for command in required if not shutil.which(command)]
+        if missing:
+            sys.exit(_("The build needs {0}, not found on this machine's PATH ([{1}] requires); install it "
+                       "and run this again.").format(", ".join(missing), self.name))
+
     @abstractmethod
     def plan(self, stale: list, record) -> list:
         """The BuildRuns that rebuild the *stale* artifacts; exits when it cannot."""
@@ -108,9 +119,9 @@ class Builder(ABC):
         started = time.time()
         for run in runs:
             command = [*run.command, *extra_args]
-            with timed(f"Building: {command_line(command)}"):
-                if subprocess.run(command, cwd=run.cwd, env=run.env).returncode != 0:
-                    sys.exit("The build failed; nothing packaged.")
+            with timed(_("Building: {0}").format(command_line(command))):
+                if run_logged(command, cwd=run.cwd, env=run.env) != 0:
+                    sys.exit(_("The build failed; nothing packaged."))
         if self.record_owner == TOOL:
             records.write(self.record_path(), version, source, started, self.toolchain_versions(),
                           self.dependency_versions(), features, list(extra_args))

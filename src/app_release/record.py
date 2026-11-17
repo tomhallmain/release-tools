@@ -16,6 +16,7 @@ import sys
 import time
 
 from app_release import __version__, vcs
+from app_release.lib.translations import _
 from app_release.log import logger
 from app_release.model import BuildRecord
 
@@ -30,8 +31,8 @@ def load(path: str):
         data = json.load(f)
     schema = data.get("schema", 1) if isinstance(data, dict) else None
     if not isinstance(schema, int) or schema > SCHEMA:
-        sys.exit(f"{path} has build record schema {schema!r}; app-release {__version__} reads "
-                 f"up to {SCHEMA}. Update app-release.")
+        sys.exit(_("{0} has build record schema {1!r}; app-release {2} reads up to {3}. "
+                   "Update app-release.").format(path, schema, __version__, SCHEMA))
     return from_dict(path, data, os.path.getmtime(path))
 
 
@@ -89,17 +90,17 @@ def restore(source: str, record_path: str, artifacts) -> None:
         with open(source, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError) as e:
-        sys.exit(f"--build-info: cannot read {source}: {e}")
+        sys.exit(_("--build-info: cannot read {0}: {1}").format(source, e))
     commit = data.get("source", {}).get("commit") if isinstance(data, dict) else None
     if not commit or not data.get("version"):
-        sys.exit(f"--build-info: {source} names no version and commit; is it a build record?")
+        sys.exit(_("--build-info: {0} names no version and commit; is it a build record?").format(source))
     if os.path.abspath(source) != os.path.abspath(record_path):
         os.makedirs(os.path.dirname(record_path), exist_ok=True)
         shutil.copyfile(source, record_path)
     oldest = min(os.path.getmtime(a.path) for a in artifacts)
     os.utime(record_path, (oldest - 1, oldest - 1))
-    logger.info(f"Restored {record_path} from {source}: version {data['version']}, "
-                f"build {data.get('build_id', '?')}, commit {commit[:10]}.")
+    logger.info(_("Restored {0} from {1}: version {2}, build {3}, commit {4}.").format(
+        record_path, source, data["version"], data.get("build_id", "?"), commit[:10]))
 
 
 def source_state(repo: str) -> dict:
@@ -133,4 +134,4 @@ def write(path: str, version: str, source: dict, started: float, toolchain: dict
     os.replace(temporary, path)
     # A second early: file times can come from a coarser clock than time.time().
     os.utime(path, (started - 1, started - 1))
-    logger.info(f"Wrote the build record {path}.")
+    logger.info(_("Wrote the build record {0}.").format(path))

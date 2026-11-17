@@ -2,19 +2,21 @@
 
 The build script writes its own record, ``build/nuitka/build_info.json``,
 before it compiles, and the pip lock file beside it; the executables land
-directly in ``dist/``. An ``<App>Headless`` executable is rebuilt with the
+directly in ``dist/``, or on macOS as ``dist/<Product>.app`` bundles. An ``<App>Headless`` executable is rebuilt with the
 script's ``--with-headless`` (which builds both) or ``--headless``. A rebuild
 gets this package's memory-wait plugin in ``NUITKA_MEMORY_WAIT_PLUGIN``.
 """
 import os
 import re
+import shutil
 import sys
 
 from app_release import platforms
-from app_release.builders.base import Builder, APP
+from app_release.builders.base import Builder, APP, run_version
 from app_release.builders.toolchains import build_python
+from app_release.lib.translations import _
 from app_release.log import logger
-from app_release.model import EXECUTABLE, Artifact, BuildRun
+from app_release.model import DIRECTORY, EXECUTABLE, Artifact, BuildRun
 from app_release.versions import FileVersion, PatternVersion
 
 BUILD_SCRIPT = "build_exe.py"
@@ -27,6 +29,7 @@ class NuitkaBuilder(Builder):
     name = "nuitka"
     record_owner = APP
     default_features = {
+        # The note is a release notes line, so it stays in English.
         "oqs": {"rebuild_option": "--with-oqs", "note": "OQS (post-quantum) encryption"},
     }
     default_variant_hints = {
@@ -36,8 +39,8 @@ class NuitkaBuilder(Builder):
     @classmethod
     def add_options(cls, parser) -> None:
         parser.add_argument("--memory-wait-plugin", action="store_true",
-                            help="print the path of the Nuitka memory-wait plugin and exit "
-                                 "(for a build_exe.py run directly)")
+                            help=_("print the path of the Nuitka memory-wait plugin and exit "
+                                   "(for a build_exe.py run directly)"))
 
     @classmethod
     def early_action(cls, opts) -> bool:
@@ -63,25 +66,35 @@ class NuitkaBuilder(Builder):
         return os.path.isfile(self._script())
 
     def describe(self) -> str:
-        return f"{BUILD_SCRIPT} at its root"
+        return _("{0} at its root").format(BUILD_SCRIPT)
 
     def artifacts(self) -> list:
         dist = os.path.join(self.repo, "dist")
         if not os.path.isdir(dist):
             return []
-        found = []
+        found = {}
+        bundles = {}
         for name in sorted(os.listdir(dist)):
             path = os.path.join(dist, name)
+            base, ext = os.path.splitext(name)
+            if sys.platform == "darwin" and ext == ".app" and os.path.isdir(path):
+                bundles[base] = Artifact(product=base, path=path, kind=DIRECTORY, platform=platforms.host())
+                continue
             if not os.path.isfile(path):
                 continue
-            base, ext = os.path.splitext(name)
             if sys.platform == "win32":
                 if ext.lower() != ".exe":
                     continue
             elif ext or not os.access(path, os.X_OK):
                 continue
-            found.append(Artifact(product=base, path=path, kind=EXECUTABLE, platform=platforms.host()))
-        return found
+            found[base] = Artifact(product=base, path=path, kind=EXECUTABLE, platform=platforms.host())
+        for product, bundle in bundles.items():
+            bare = found.get(product)
+            if bare and os.path.getmtime(bare.path) >= os.path.getmtime(bundle.path):
+                logger.warning(_("Both {0} and {1} exist and the executable is newer; packaging the app "
+                                 "bundle. Delete whichever the build no longer makes.").format(bare.path, bundle.path))
+            found[product] = bundle
+        return [found[product] for product in sorted(found)]
 
     def default_version_source(self):
         """VERSION at the root, or APP_VERSION in the module the build script
@@ -104,8 +117,20 @@ class NuitkaBuilder(Builder):
         return [(lock, "requirements.lock.txt")] if os.path.isfile(lock) else []
 
     def note_lines(self, record) -> list:
+        # In English whatever the locale: release notes are published with the release.
         return ["- At its first start the executable unpacks its runtime into the app's data folder; "
                 "later starts of the same build reuse it."]
+
+    def preflight(self) -> None:
+        super().preflight()
+        # On Windows Nuitka finds MSVC or downloads MinGW itself.
+        if sys.platform == "darwin":
+            # /usr/bin/cc exists without the Command Line Tools, as a stub that offers to install them.
+            if run_version(["xcode-select", "-p"]) is None:
+                sys.exit(_("Nuitka needs a C compiler: install the Xcode Command Line Tools "
+                           "(xcode-select --install) and run this again."))
+        elif sys.platform != "win32" and not any(shutil.which(c) for c in ("cc", "gcc", "clang")):
+            sys.exit(_("Nuitka needs a C compiler (gcc or clang); install one and run this again."))
 
     def plan(self, stale: list, record) -> list:
         with open(self._script(), "r", encoding="utf-8") as f:
@@ -115,8 +140,8 @@ class NuitkaBuilder(Builder):
         secondary = [p for p in products if p != app_name]
         for product in secondary:
             if product != f"{app_name}Headless":
-                sys.exit(f"Cannot tell how {BUILD_SCRIPT} builds {product}; build it yourself, "
-                         "or leave it out with --products.")
+                sys.exit(_("Cannot tell how {0} builds {1}; build it yourself, or leave it out with "
+                           "--products.").format(BUILD_SCRIPT, product))
         target_args = [[]] if app_name in products else []
         if secondary:
             if '"--with-headless"' in source:
@@ -125,10 +150,10 @@ class NuitkaBuilder(Builder):
             elif '"--headless"' in source:
                 target_args.append(["--headless"])
             else:
-                sys.exit(f"{BUILD_SCRIPT} has no option that builds {secondary[0]}; build it yourself, "
-                         "or leave it out with --products.")
+                sys.exit(_("{0} has no option that builds {1}; build it yourself, or leave it out with "
+                           "--products.").format(BUILD_SCRIPT, secondary[0]))
         python, reason = build_python(self.repo, getattr(self.options, "toolchain", None), record)
-        logger.info(f"Building with {python} ({reason}).")
+        logger.info(_("Building with {0} ({1}).").format(python, reason))
         env = dict(os.environ, **{MEMORY_WAIT_ENV: MEMORY_WAIT_PLUGIN})
         return [BuildRun(command=[python, self._script(), *args], cwd=self.repo, env=env,
                          platform=platforms.host())

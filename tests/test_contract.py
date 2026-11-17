@@ -68,7 +68,7 @@ def test_reads_no_record_before_a_build(builder):
 
 
 def test_paths_are_inside_the_repo(builder):
-    for path in (builder.record_path(), builder.log_dir(), builder.stage_dir("v1.0.0")):
+    for path in (builder.record_path(), builder.stage_dir("v1.0.0")):
         assert os.path.commonpath([builder.repo, path]) == builder.repo
 
 

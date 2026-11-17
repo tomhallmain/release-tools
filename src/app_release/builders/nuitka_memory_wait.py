@@ -1,15 +1,13 @@
 """Nuitka user plugin (``--user-plugin=``) that waits for free memory before
 the onefile payload is compressed.
 
-Compression is the last step of a build, after the C compilation, and at
-level 22 with one zstd worker per Nuitka job it can need several GiB; when an
-allocation fails the build is lost. Before compressing, the plugin estimates
-the memory needed from the payload size and Nuitka's job limit, and waits until
-that much is free (on Windows, the commit memory left, which allocations draw
-from). BUILD_MIN_FREE_MEMORY_GB sets the amount instead; 0 turns the check off.
-It also reports the least free memory seen while compressing.
-
-The helpers above the plugin class work without Nuitka, for tests.
+Compression runs after the C compilation; at level 22 with one zstd worker per
+Nuitka job it can need several GiB, and a failed allocation loses the build.
+The plugin estimates the need from the payload size and Nuitka's job limit and
+waits until that much is free (on Windows, the commit memory left, which
+allocations draw from). BUILD_MIN_FREE_MEMORY_GB sets the amount; 0 turns the
+check off. It also reports the least free memory seen while compressing. The
+helpers above the plugin class work without Nuitka, for tests.
 """
 
 import atexit
