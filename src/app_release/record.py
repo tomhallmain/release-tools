@@ -59,6 +59,29 @@ def from_dict(path: str, data: dict, written_at: float) -> BuildRecord:
     )
 
 
+def date_before_artifacts(path: str, artifacts) -> bool:
+    """Date *path* just before the oldest artifact, when the record is later.
+
+    An app writes its record before a long compile. If the clock steps
+    backward during that compile, an artifact finished afterward is stamped
+    earlier than the record and looks like a leftover from a previous build.
+    A machine with two operating systems often does this across hibernation:
+    one stores the hardware clock as local time and the other as UTC, so
+    resuming the OS that is not the default moves the clock by the timezone
+    offset. Returns whether the timestamp was moved.
+    """
+    if not artifacts or not os.path.isfile(path):
+        return False
+    oldest = min(os.path.getmtime(artifact.path) for artifact in artifacts)
+    if os.path.getmtime(path) <= oldest:
+        return False
+    stamped = oldest - 1
+    os.utime(path, (stamped, stamped))
+    logger.info(f"The clock stepped backward during the build; dated {path} "
+                "just before the oldest artifact, which is still from this build.")
+    return True
+
+
 def restore(source: str, record_path: str, artifacts) -> None:
     """Copy *source* to *record_path*, dated before the oldest artifact, so the
     checks take it as the record those artifacts were built with."""

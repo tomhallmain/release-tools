@@ -29,6 +29,20 @@ def test_the_nuitka_layout_is_normalized(tmp_path):
     assert record.written_at == os.path.getmtime(path)
 
 
+def test_a_record_later_than_its_artifacts_is_dated_before_them(tmp_path):
+    path = write_record(tmp_path, commit=HEAD)
+    exe = tmp_path / "app.exe"
+    exe.write_bytes(b"exe")
+    os.utime(exe, (1000, 1000))
+    os.utime(path, (5000, 5000))
+    from app_release.model import EXECUTABLE, Artifact
+
+    artifact = Artifact("App", str(exe), EXECUTABLE, "windows-x64")
+    assert records.date_before_artifacts(path, [artifact])
+    assert os.path.getmtime(path) == 999
+    assert records.date_before_artifacts(path, [artifact]) is False
+
+
 def test_a_missing_record_is_none(tmp_path):
     assert records.load(str(tmp_path / "none.json")) is None
 

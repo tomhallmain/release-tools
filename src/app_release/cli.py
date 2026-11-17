@@ -53,8 +53,9 @@ import subprocess
 import sys
 import time
 
-from app_release import __version__, config as configuration, pipeline, vcs
+from app_release import __version__, config as configuration, pipeline, record as records, vcs
 from app_release.builders import BUILDERS, DEFAULT as DEFAULT_BUILDER
+from app_release.builders.base import APP
 from app_release.destinations import DESTINATIONS, DEFAULT as DEFAULT_DESTINATIONS
 from app_release.log import command_line, duration, logger, setup as setup_logging, timed
 from app_release.model import ReleasePlan
@@ -172,6 +173,11 @@ def main(argv=None) -> None:
         if pipeline.rebuild_stale(repo, version, artifacts, builder, record,
                                   pipeline.feature_args(record, features, build_args), features):
             artifacts = [a for a in builder.artifacts() if not opts.products or a.product in opts.products]
+            # The app's record is written before the compile. A clock step
+            # backward during the compile leaves a finished executable older
+            # than that file.
+            if builder.record_owner == APP:
+                records.date_before_artifacts(builder.record_path(), artifacts)
     record = builder.read_record()
     limits = [d.max_asset_bytes for d in destinations if d.max_asset_bytes]
     errors, warnings = pipeline.check(repo, version, tag, record, artifacts, opts.variant, variant_hints,
